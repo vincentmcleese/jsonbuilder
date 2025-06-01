@@ -4,6 +4,7 @@ import {
   fireEvent,
   waitFor,
   cleanup,
+  within,
 } from "@testing-library/react";
 import HomePage from "./page"; // Adjust path to your HomePage component
 import { server } from "@/mocks/server"; // MSW server
@@ -14,6 +15,7 @@ import {
   GenerateRawRequest,
   ClientFacingValidationResponse,
   GenerateRawApiResponse,
+  GenerateGuideApiResponse,
 } from "@/lib/validations";
 import {
   triggerTools,
@@ -34,11 +36,11 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
   });
   // beforeAll, afterAll for server.listen/close are in jest.setup.js
 
-  it("renders initial Sprint 3 UI correctly (including S2 elements)", () => {
+  it("renders initial Sprint UI correctly (now reflects S5)", () => {
     render(<HomePage />);
     expect(
       screen.getByRole("heading", {
-        name: /n8n Workflow Generator \(Sprint 3 Refined\)/i,
+        name: /n8n Workflow Generator \(Sprint 5\)/i,
       })
     ).toBeInTheDocument();
     expect(
@@ -58,12 +60,12 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     expect(textarea).toHaveValue("New user prompt");
   });
 
-  it("S2: calls validation API, shows loading, then displays successful validation data and enables tool selection", async () => {
+  it("S2: calls validation API, displays successful validation data and enables tool selection", async () => {
     const mockS2Response: ClientFacingValidationResponse = {
       valid: true,
-      extractedTriggerText: "S2 Success Trigger",
-      extractedProcessText: "S2 Success Process",
-      extractedActionText: "S2 Success Action",
+      extractedTriggerText: "S2 Success: Extracted Trigger",
+      extractedProcessText: "S2 Success: Extracted Process",
+      extractedActionText: "S2 Success: Extracted Action",
       matchedTriggerTool: triggerTools[1],
       matchedProcessTool: processLogicTools[1],
       matchedActionTool: actionTools[1],
@@ -79,41 +81,42 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     render(<HomePage />);
     fireEvent.change(
       screen.getByRole("textbox", { name: /Enter automation goal/i }),
-      { target: { value: "S2 success test prompt" } }
+      { target: { value: "Specific S2 success prompt" } }
     );
     fireEvent.click(screen.getByRole("button", { name: /Validate Prompt/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Prompt Validated!")).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          (content, node) =>
-            node?.textContent ===
-            `AI Understood Trigger: ${mockS2Response.extractedTriggerText}`
-        )
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          (content, node) =>
-            node?.textContent ===
-            `AI Understood Process: ${mockS2Response.extractedProcessText}`
-        )
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          (content, node) =>
-            node?.textContent ===
-            `AI Understood Action: ${mockS2Response.extractedActionText}`
-        )
-      ).toBeInTheDocument();
-
-      expect(screen.getByText("Confirm Tools & Model")).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", {
-          name: /Generate Workflow with Selections/i,
-        })
-      ).toBeInTheDocument();
     });
+
+    const successAlertTitle = screen.getByText("Prompt Validated!");
+    const successAlert = successAlertTitle.closest('[role="alert"]');
+    expect(successAlert).not.toBeNull();
+
+    if (successAlert) {
+      expect(
+        within(successAlert as HTMLElement).getByText(
+          /AI Understood Trigger: S2 Success: Extracted Trigger/i
+        )
+      ).toBeInTheDocument();
+      expect(
+        within(successAlert as HTMLElement).getByText(
+          /AI Understood Process: S2 Success: Extracted Process/i
+        )
+      ).toBeInTheDocument();
+      expect(
+        within(successAlert as HTMLElement).getByText(
+          /AI Understood Action: S2 Success: Extracted Action/i
+        )
+      ).toBeInTheDocument();
+    }
+
+    expect(screen.getByText("Confirm Tools & Model")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /Generate Workflow with Selections/i,
+      })
+    ).toBeInTheDocument();
   });
 
   it("S2: displays feedback and suggestions when prompt validation is not valid", async () => {
@@ -187,6 +190,21 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     return defaultMockData;
   };
 
+  it("renders initial Sprint 3 UI correctly (including S2 elements)", () => {
+    render(<HomePage />);
+    expect(
+      screen.getByRole("heading", {
+        name: /n8n Workflow Generator \(Sprint 5\)/i,
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: /Enter automation goal/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Validate Prompt/i })
+    ).toBeInTheDocument();
+  });
+
   it("S3: pre-populates with default matched tools after validation", async () => {
     const user = userEvent.setup();
     render(<HomePage />);
@@ -201,7 +219,7 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       screen.getByRole("combobox", { name: /Action Tool/i })
     ).toHaveTextContent(actionTools[0]);
     expect(
-      screen.getByRole("combobox", { name: /LLM Model/i })
+      screen.getByRole("combobox", { name: /LLM Model \(for JSON\)/i })
     ).toHaveTextContent(llmModels[0]);
   });
 
@@ -214,9 +232,9 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       screen.getByRole("combobox", { name: /Trigger Tool/i })
     ).toHaveTextContent(triggerTools[1]);
 
-    await selectShadcnOption(user, /LLM Model/i, llmModels[1]);
+    await selectShadcnOption(user, /LLM Model \(for JSON\)/i, llmModels[1]);
     expect(
-      screen.getByRole("combobox", { name: /LLM Model/i })
+      screen.getByRole("combobox", { name: /LLM Model \(for JSON\)/i })
     ).toHaveTextContent(llmModels[1]);
   });
 
@@ -227,8 +245,8 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       user
     );
     const testUserPromptInput = "Test prompt for S3 setup";
-    const expectedLlmOutput =
-      '{"n8n": "json_workflow"}---JSON-GUIDE-SEPARATOR---### Guide Header\n- Step 1';
+    const expectedLlmOutput = '{"n8n": "json_workflow"}';
+    const expectedGuideOutput = "### Guide Header\n- Step 1";
     let capturedRawRequestPayload: GenerateRawRequest | null = null;
 
     server.use(
@@ -236,20 +254,17 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
         capturedRawRequestPayload =
           (await request.json()) as GenerateRawRequest;
         await new Promise((resolve) => setTimeout(resolve, 100));
-        return HttpResponse.json(
-          {
-            output: expectedLlmOutput,
-            isJsonSyntaxValid: true,
-            generatedJsonString: '{"n8n": "json_workflow"}',
-            generatedGuideString: "### Guide Header\n- Step 1",
-          },
-          { status: 200 }
-        );
+        const mockApiResponse: GenerateRawApiResponse = {
+          generatedJsonString: expectedLlmOutput,
+          isJsonSyntaxValid: true,
+          jsonSyntaxErrorMessage: null,
+        };
+        return HttpResponse.json(mockApiResponse, { status: 200 });
       })
     );
 
     await selectShadcnOption(user, /Action Tool/i, actionTools[1]);
-    await selectShadcnOption(user, /LLM Model/i, llmModels[1]);
+    await selectShadcnOption(user, /LLM Model \(for JSON\)/i, llmModels[1]);
 
     const initialGenerateButton = screen.getByRole("button", {
       name: /Generate Workflow with Selections/i,
@@ -269,8 +284,7 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       expect(screen.getByText("Generated JSON is Valid!")).toBeInTheDocument()
     );
 
-    expect(screen.getByText('{"n8n": "json_workflow"}')).toBeInTheDocument();
-    expect(screen.getByText(/^### Guide Header/)).toBeInTheDocument();
+    expect(screen.getByText(expectedLlmOutput)).toBeInTheDocument();
 
     expect(capturedRawRequestPayload).not.toBeNull();
     if (capturedRawRequestPayload) {
@@ -326,14 +340,12 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     expect(screen.getByText(generationErrorMessage)).toBeInTheDocument();
   });
 
-  it("S3/S5: shows JSON syntax error from /api/generate-raw", async () => {
+  it("S3/S5: displays JSON syntax error from /api/generate-raw", async () => {
     const user = userEvent.setup();
     render(<HomePage />);
     await setupToToolSelectionStageAndGetDefaults(user);
     const mockJsonErrorResponse: GenerateRawApiResponse = {
-      rawLlmOutput: "invalid json---JSON-GUIDE-SEPARATOR---Guide here",
       generatedJsonString: "invalid json",
-      generatedGuideString: "Guide here",
       isJsonSyntaxValid: false,
       jsonSyntaxErrorMessage: "Syntax error at position 0",
     };
@@ -349,5 +361,105 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       expect(screen.getByText("Generated JSON Invalid")).toBeInTheDocument()
     );
     expect(screen.getByText(/Syntax error at position 0/i)).toBeInTheDocument();
+  });
+
+  describe("Sprint 6 Guide Generation", () => {
+    beforeEach(() => {
+      // Ensure a successful JSON generation state before each guide test
+      const mockPrevGenerationResult: GenerateRawApiResponse = {
+        generatedJsonString: JSON.stringify({ nodes: [], connections: {} }),
+        isJsonSyntaxValid: true,
+        jsonSyntaxErrorMessage: null,
+      };
+      // Provide this as the initial state for generationResult if needed by the test setup
+      // For tests directly calling handleGenerateGuide, this state needs to be set in the component.
+      // We will simulate this by first having /api/generate-raw return successfully in a setup step.
+    });
+
+    const setupForGuideGeneration = async (
+      user: ReturnType<typeof userEvent.setup>
+    ) => {
+      await setupToToolSelectionStageAndGetDefaults(user);
+
+      const mockJsonResponse: GenerateRawApiResponse = {
+        generatedJsonString: JSON.stringify({ mock: "workflow for S6 setup" }), // Unique content
+        isJsonSyntaxValid: true,
+        jsonSyntaxErrorMessage: null,
+        // No rawLlmOutput or generatedGuideString here as per GenerateRawApiResponse schema for S5 output
+      };
+      server.use(
+        http.post("/api/generate-raw", async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return HttpResponse.json(mockJsonResponse, { status: 200 }); // Ensure status 200
+        })
+      );
+
+      await user.click(
+        screen.getByRole("button", {
+          name: /Generate Workflow with Selections/i,
+        })
+      );
+      await screen.findByText("Generated JSON is Valid!");
+      await screen.findByRole("button", { name: /Generate Guide/i });
+      return mockJsonResponse;
+    };
+
+    it("S6: Generate Guide button appears after successful JSON syntax validation", async () => {
+      const user = userEvent.setup();
+      render(<HomePage />);
+      await setupForGuideGeneration(user);
+      expect(
+        screen.getByRole("button", { name: /Generate Guide/i })
+      ).toBeInTheDocument();
+    });
+
+    it("S6: calls /api/generate-guide and displays returned markdown guide", async () => {
+      const user = userEvent.setup();
+      render(<HomePage />);
+      const genResult = await setupForGuideGeneration(user);
+
+      const mockGuideMarkdown = "### This is the Guide Content";
+      server.use(
+        http.post("/api/generate-guide", async ({ request }) => {
+          const payload = (await request.json()) as any;
+          expect(payload.n8nWorkflowJson).toEqual(
+            genResult.generatedJsonString
+          );
+          expect(payload.selectedLlmModelForGuide).toBeDefined();
+          return HttpResponse.json(
+            { instructionalGuideMarkdown: mockGuideMarkdown },
+            { status: 200 }
+          );
+        })
+      );
+
+      await user.click(screen.getByRole("button", { name: /Generate Guide/i }));
+      await waitFor(() =>
+        expect(screen.getByText(/Generating guide.../i)).toBeInTheDocument()
+      );
+      await waitFor(() =>
+        expect(screen.getByText(mockGuideMarkdown)).toBeInTheDocument()
+      );
+      expect(
+        screen.queryByText(/Generating guide.../i)
+      ).not.toBeInTheDocument();
+    });
+
+    it("S6: shows error if guide generation API call fails", async () => {
+      const user = userEvent.setup();
+      render(<HomePage />);
+      await setupForGuideGeneration(user);
+      const guideErrorMessage = "Guide LLM Failed";
+      server.use(
+        http.post("/api/generate-guide", () =>
+          HttpResponse.json({ error: guideErrorMessage }, { status: 500 })
+        )
+      );
+      await user.click(screen.getByRole("button", { name: /Generate Guide/i }));
+      await waitFor(() =>
+        expect(screen.getByText("Guide Generation Error")).toBeInTheDocument()
+      );
+      expect(screen.getByText(guideErrorMessage)).toBeInTheDocument();
+    });
   });
 });

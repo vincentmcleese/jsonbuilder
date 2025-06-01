@@ -47,7 +47,9 @@ export default function HomePage() {
   const [selectedTrigger, setSelectedTrigger] = useState<string>("");
   const [selectedProcess, setSelectedProcess] = useState<string>("");
   const [selectedAction, setSelectedAction] = useState<string>("");
-  const [selectedModel, setSelectedModel] = useState<string>(llmModels[0]); // Default to first model
+  const [selectedModel, setSelectedModel] = useState<string>(llmModels[0]);
+  const [selectedLlmModelForGuide, setSelectedLlmModelForGuide] =
+    useState<string>(llmModels[0]);
   const [showSelections, setShowSelections] = useState(false);
 
   // Simplified state for S4 generation output
@@ -57,6 +59,15 @@ export default function HomePage() {
   );
   const [generationResult, setGenerationResult] =
     useState<GenerateRawApiResponse | null>(null);
+
+  // NEW: Guide Generation States
+  const [guideGenerationLoading, setGuideGenerationLoading] = useState(false);
+  const [guideGenerationError, setGuideGenerationError] = useState<
+    string | null
+  >(null);
+  const [generatedGuideMarkdown, setGeneratedGuideMarkdown] = useState<
+    string | null
+  >(null);
 
   // Effect to pre-populate selections when validationData is successful
   useEffect(() => {
@@ -70,7 +81,8 @@ export default function HomePage() {
       setSelectedAction(
         validationData.matchedActionTool || actionTools[0] || ""
       );
-      setSelectedModel(llmModels[0]); // Reset to default model on new valid prompt
+      setSelectedModel(llmModels[0]);
+      setSelectedLlmModelForGuide(llmModels[0]);
       setShowSelections(true);
     } else {
       setShowSelections(false);
@@ -146,6 +158,43 @@ export default function HomePage() {
       );
     } finally {
       setRawGenerationLoading(false);
+    }
+  }
+
+  async function handleGenerateGuide() {
+    if (!generationResult?.generatedJsonString || !validationData) return;
+    setGuideGenerationLoading(true);
+    setGuideGenerationError(null);
+    setGeneratedGuideMarkdown(null);
+
+    const guidePayload = {
+      n8nWorkflowJson: generationResult.generatedJsonString,
+      userNaturalLanguagePrompt: userPromptInput,
+      aiExtractedTrigger: validationData.extractedTriggerText,
+      aiExtractedProcess: validationData.extractedProcessText,
+      aiExtractedAction: validationData.extractedActionText,
+      selectedTriggerTool: selectedTrigger,
+      selectedProcessLogicTool: selectedProcess,
+      selectedActionTool: selectedAction,
+      selectedLlmModelForGuide: selectedLlmModelForGuide,
+    };
+
+    try {
+      const response = await fetch("/api/generate-guide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(guidePayload),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Guide generation failed");
+      setGeneratedGuideMarkdown(data.instructionalGuideMarkdown);
+    } catch (err) {
+      setGuideGenerationError(
+        err instanceof Error ? err.message : "Guide generation error"
+      );
+    } finally {
+      setGuideGenerationLoading(false);
     }
   }
 
@@ -289,18 +338,43 @@ export default function HomePage() {
             </Select>
           </div>
 
-          {/* LLM Model Select */}
+          {/* LLM Model Select for JSON */}
           <div className="space-y-1">
-            <label htmlFor="llmModel" className="block text-sm font-medium">
-              LLM Model <Bot className="inline h-4 w-4 mb-0.5" />
+            <label htmlFor="llmModelJson" className="block text-sm font-medium">
+              LLM Model (for JSON) <Bot className="inline h-4 w-4 mb-0.5" />
             </label>
             <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger id="llmModel">
-                <SelectValue placeholder="Select LLM model..." />
+              <SelectTrigger id="llmModelJson">
+                <SelectValue placeholder="Select LLM for JSON..." />
               </SelectTrigger>
               <SelectContent>
                 {llmModels.map((m) => (
-                  <SelectItem key={m} value={m}>
+                  <SelectItem key={`json-${m}`} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* NEW: LLM Model Select for Guide */}
+          <div className="space-y-1">
+            <label
+              htmlFor="llmModelGuide"
+              className="block text-sm font-medium"
+            >
+              LLM Model (for Guide) <Bot className="inline h-4 w-4 mb-0.5" />
+            </label>
+            <Select
+              value={selectedLlmModelForGuide}
+              onValueChange={setSelectedLlmModelForGuide}
+            >
+              <SelectTrigger id="llmModelGuide">
+                <SelectValue placeholder="Select LLM for Guide..." />
+              </SelectTrigger>
+              <SelectContent>
+                {llmModels.map((m) => (
+                  <SelectItem key={`guide-${m}`} value={m}>
                     {m}
                   </SelectItem>
                 ))}
@@ -317,6 +391,22 @@ export default function HomePage() {
               ? "Generating Workflow..."
               : "Generate Workflow with Selections"}
           </Button>
+
+          {/* NEW: Button to Generate Guide - appears after JSON is successfully generated and valid */}
+          {generationResult &&
+            generationResult.isJsonSyntaxValid &&
+            !guideGenerationLoading && (
+              <Button
+                onClick={handleGenerateGuide}
+                className="w-full mt-2"
+                variant="outline"
+              >
+                Generate Guide
+              </Button>
+            )}
+          {guideGenerationLoading && (
+            <p className="mt-2">Generating guide...</p>
+          )}
         </div>
       )}
 
@@ -361,6 +451,25 @@ export default function HomePage() {
           </h3>
           <pre className="whitespace-pre-wrap text-sm overflow-x-auto">
             {generationResult.generatedJsonString}
+          </pre>
+        </div>
+      )}
+
+      {/* NEW: Display for Guide Generation Result */}
+      {guideGenerationError && (
+        <Alert variant="destructive" className="w-full max-w-2xl mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Guide Generation Error</AlertTitle>
+          <AlertDescription>{guideGenerationError}</AlertDescription>
+        </Alert>
+      )}
+      {generatedGuideMarkdown && (
+        <div className="w-full max-w-4xl p-4 mt-4 border rounded-md bg-gray-100 dark:bg-gray-700">
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
+            Instructional Guide:
+          </h3>
+          <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">
+            {generatedGuideMarkdown}
           </pre>
         </div>
       )}

@@ -109,3 +109,31 @@ export const GenerateRawApiResponseSchema = z.object({
 export type GenerateRawApiResponse = z.infer<
   typeof GenerateRawApiResponseSchema
 >;
+
+// Schema for /api/generate-guide request body (Sprint 6)
+export const GenerateGuideRequestSchema = z.object({
+  n8nWorkflowJson: z.string().min(1, "n8n workflow JSON cannot be empty."),
+  userNaturalLanguagePrompt: z
+    .string()
+    .min(1, "Natural language prompt cannot be empty."),
+  aiExtractedTrigger: z.string().nullable(),
+  aiExtractedProcess: z.string().nullable(),
+  aiExtractedAction: z.string().nullable(),
+  selectedTriggerTool: z.string(),
+  selectedProcessLogicTool: z.string(),
+  selectedActionTool: z.string(),
+  selectedLlmModelForGuide: z
+    .string()
+    .min(1, "LLM model for guide generation is required."),
+});
+export type GenerateGuideRequest = z.infer<typeof GenerateGuideRequestSchema>;
+
+// Schema for /api/generate-guide response body (Sprint 6)
+export const GenerateGuideApiResponseSchema = z.object({
+  instructionalGuideMarkdown: z
+    .string()
+    .describe("The generated guide in Markdown format."),
+});
+export type GenerateGuideApiResponse = z.infer<
+  typeof GenerateGuideApiResponseSchema
+>;
