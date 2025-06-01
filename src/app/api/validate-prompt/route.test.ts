@@ -8,6 +8,7 @@ import {
   PromptValidationResponseSchema,
   ClientFacingValidationResponse,
 } from "@/lib/validations";
+import { PromptSet } from "@/types/admin-prompts";
 import {
   triggerTools,
   processLogicTools,
@@ -29,10 +30,31 @@ describe("/api/validate-prompt API endpoint (Sprint 3 Refined)", () => {
   beforeEach(() => {
     process.env = { ...originalEnv }; // Reset env first
     process.env.OPENROUTER_API_KEY = "test-key"; // Set key for most tests
-    // Mock fs.readFileSync consistently for all tests in this describe block
-    jest
-      .spyOn(fs, "readFileSync")
-      .mockReturnValue('User prompt: "{{USER_PROMPT}}" // Template content');
+
+    const validationPromptContent =
+      'User prompt: "{{USER_PROMPT}}" // Template content';
+    const validationPromptSet: PromptSet = [
+      {
+        version: 1,
+        content: validationPromptContent,
+        changeDescription: "Test validation prompt v1",
+        createdAt: new Date().toISOString(),
+        lastModifiedAt: new Date().toISOString(),
+        isActive: true,
+      },
+    ];
+
+    jest.spyOn(fs, "readFileSync").mockImplementation((pathParam) => {
+      const filePathString =
+        typeof pathParam === "string" ? pathParam : pathParam.toString();
+      if (filePathString.includes("validation.json")) {
+        return JSON.stringify(validationPromptSet);
+      }
+      throw new Error(
+        `Unexpected fs.readFileSync call in test: ${filePathString}`
+      );
+    });
+
     if (fetchSpy) {
       fetchSpy.mockRestore();
     }
@@ -161,7 +183,7 @@ describe("/api/validate-prompt API endpoint (Sprint 3 Refined)", () => {
     const data = await response.json();
     expect(response.status).toBe(500);
     expect(data.error).toBe(
-      "Could not load validation instructions. Please contact support."
+      "Validation instructions not configured. Please contact support."
     );
   });
 

@@ -179,6 +179,12 @@ const AdminPanel = () => {
     }
   };
 
+  // Helper for token estimation (simple char-based)
+  const estimateTokens = (text: string | undefined | null): number => {
+    if (!text) return 0;
+    return Math.ceil(text.length / 4);
+  };
+
   if (isLoading)
     return <div className="p-4 text-center">Loading prompts...</div>;
   if (fetchError)
@@ -203,6 +209,10 @@ const AdminPanel = () => {
   // Initialize editorTitle and currentPromptTypeForEditor
   let editorTitleStr = "Prompt Content Viewer"; // Renamed to avoid conflict
   let currentPromptTypeForEditor: AdminPromptTypeEnum | null = null;
+  let activeTrainingDataContent: string | undefined = undefined;
+  let estimatedTemplateTokens = 0;
+  let estimatedTrainingTokens = 0;
+  let estimatedTotalTokens = 0;
 
   if (isEditing && editingPromptType) {
     editorTitleStr = `Editing New Version for: ${
@@ -214,6 +224,31 @@ const AdminPanel = () => {
       promptData[selectedVersionDetails.type]?.displayName
     }`;
     currentPromptTypeForEditor = selectedVersionDetails.type;
+  }
+
+  // Calculate token estimates if the current editor is for GenerationMain or if viewing its training data
+  if (currentPromptTypeForEditor === AdminPromptTypeEnum.GenerationMain) {
+    estimatedTemplateTokens = estimateTokens(currentEditorContent);
+    const trainingDataPromptSet =
+      promptData[AdminPromptTypeEnum.GenerationMainTrainingData];
+    if (trainingDataPromptSet) {
+      const activeTrainingData =
+        trainingDataPromptSet.versions.find((v) => v.isActive) ||
+        [...trainingDataPromptSet.versions].sort(
+          (a, b) => b.version - a.version
+        )[0];
+      if (activeTrainingData) {
+        activeTrainingDataContent = activeTrainingData.content;
+        estimatedTrainingTokens = estimateTokens(activeTrainingDataContent);
+      }
+    }
+    estimatedTotalTokens = estimatedTemplateTokens + estimatedTrainingTokens;
+  } else if (
+    currentPromptTypeForEditor ===
+    AdminPromptTypeEnum.GenerationMainTrainingData
+  ) {
+    estimatedTrainingTokens = estimateTokens(currentEditorContent); // Here currentEditorContent is the training data
+    // Potentially show how it contributes if a main prompt is also selected/active - simpler for now
   }
 
   const availableVarsForCurrentEditor =
@@ -347,6 +382,41 @@ const AdminPanel = () => {
                 </div>
               </div>
             )}
+
+          {/* Token Estimation Display - specific to GenerationMain context */}
+          {currentPromptTypeForEditor ===
+            AdminPromptTypeEnum.GenerationMain && (
+            <div className="mb-2 p-2 border border-dashed border-orange-300 dark:border-orange-700 rounded-md bg-orange-50 dark:bg-orange-900/20">
+              <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">
+                Token Estimates (Approx. 1 token ≈ 4 chars):
+              </p>
+              <ul className="text-xs text-orange-700 dark:text-orange-400 space-y-0.5">
+                <li>Main Template: ~{estimatedTemplateTokens} tokens</li>
+                <li>
+                  Active Training Data: ~{estimatedTrainingTokens} tokens (V
+                  {promptData[
+                    AdminPromptTypeEnum.GenerationMainTrainingData
+                  ]?.versions.find((v) => v.isActive)?.version || "N/A"}
+                  )
+                </li>
+                <li className="font-semibold">
+                  Estimated Total for Prompt: ~{estimatedTotalTokens} tokens
+                </li>
+              </ul>
+            </div>
+          )}
+          {/* Display for just training data if that's what's selected */}
+          {currentPromptTypeForEditor ===
+            AdminPromptTypeEnum.GenerationMainTrainingData && (
+            <div className="mb-2 p-2 border border-dashed border-orange-300 dark:border-orange-700 rounded-md bg-orange-50 dark:bg-orange-900/20">
+              <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">
+                Token Estimate (Approx. 1 token ≈ 4 chars):
+              </p>
+              <p className="text-xs text-orange-700 dark:text-orange-400">
+                This Training Data: ~{estimatedTrainingTokens} tokens
+              </p>
+            </div>
+          )}
 
           {isEditing && editingPromptType && (
             <div className="space-y-2 mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">

@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import { jest } from "@jest/globals";
 import fs from "fs";
 import { GenerateRawRequest, GenerateRawApiResponse } from "@/lib/validations";
+import { PromptSet } from "@/types/admin-prompts";
 
 const mockRequest = (body?: unknown) =>
   ({ json: async () => body } as NextRequest);
@@ -26,11 +27,46 @@ const validSprint4RequestBody: GenerateRawRequest = {
 describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
   beforeEach(() => {
     process.env = { ...originalEnv, OPENROUTER_API_KEY: "test-api-key" };
-    jest
-      .spyOn(fs, "readFileSync")
-      .mockReturnValue(
-        "UserGoal: {{USER_NATURAL_LANGUAGE_PROMPT}}, AITrigger: {{AI_EXTRACTED_TRIGGER_TEXT}}, AIProcess: {{AI_EXTRACTED_PROCESS_TEXT}}, AIAction: {{AI_EXTRACTED_ACTION_TEXT}}, SelTrigger: {{SELECTED_TRIGGER_TOOL}}, SelProcess: {{SELECTED_PROCESS_LOGIC_TOOL}}, SelAction: {{SELECTED_ACTION_TOOL}}"
+
+    const mainPromptContent =
+      "UserGoal: {{USER_NATURAL_LANGUAGE_PROMPT}}, AITrigger: {{AI_EXTRACTED_TRIGGER_TEXT}}, AIProcess: {{AI_EXTRACTED_PROCESS_TEXT}}, AIAction: {{AI_EXTRACTED_ACTION_TEXT}}, SelTrigger: {{SELECTED_TRIGGER_TOOL}}, SelProcess: {{SELECTED_PROCESS_LOGIC_TOOL}}, SelAction: {{SELECTED_ACTION_TOOL}}, Training: {{TRAINING_DATA}}";
+    const mainPromptSet: PromptSet = [
+      {
+        version: 1,
+        content: mainPromptContent,
+        changeDescription: "Test main prompt v1",
+        createdAt: new Date().toISOString(),
+        lastModifiedAt: new Date().toISOString(),
+        isActive: true,
+      },
+    ];
+    const trainingDataPromptSet: PromptSet = [
+      {
+        version: 1,
+        content: "Some mock training data.",
+        changeDescription: "Test training data v1",
+        createdAt: new Date().toISOString(),
+        lastModifiedAt: new Date().toISOString(),
+        isActive: true,
+      },
+    ];
+
+    jest.spyOn(fs, "readFileSync").mockImplementation((pathParam) => {
+      const filePathString =
+        typeof pathParam === "string" ? pathParam : pathParam.toString();
+      if (filePathString.includes("generation_main.json")) {
+        return JSON.stringify(mainPromptSet);
+      }
+      if (filePathString.includes("generation_main_training_data.json")) {
+        return JSON.stringify(trainingDataPromptSet);
+      }
+      // Fallback for any other readFileSync calls if needed, or throw error
+      // For safety, to ensure tests don't accidentally pass if an unexpected file is read:
+      throw new Error(
+        `Unexpected fs.readFileSync call in test: ${filePathString}`
       );
+    });
+
     if (fetchSpy) fetchSpy.mockRestore();
   });
 
@@ -160,7 +196,7 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
     expect(response.status).toBe(500);
     expect(await response.json()).toHaveProperty(
       "error",
-      "Could not load base prompt instructions."
+      "Main generation instructions template not configured."
     );
   });
 

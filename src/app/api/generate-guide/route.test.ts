@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import { jest } from "@jest/globals";
 import fs from "fs";
 import type { GenerateGuideRequest } from "@/lib/validations";
+import { PromptSet } from "@/types/admin-prompts";
 
 const mockRequest = (body?: unknown) =>
   ({ json: async () => body } as NextRequest);
@@ -26,11 +27,32 @@ const validGuideRequestBody: GenerateGuideRequest = {
 describe("/api/generate-guide API endpoint", () => {
   beforeEach(() => {
     process.env = { ...originalEnv, OPENROUTER_API_KEY: "test-key" };
-    jest
-      .spyOn(fs, "readFileSync")
-      .mockReturnValue(
-        "Guide prompt with {{N8N_WORKFLOW_JSON}} and other {{PLACEHOLDERS}}"
+
+    const guidePromptContent =
+      "Guide prompt with {{N8N_WORKFLOW_JSON}} and other {{PLACEHOLDERS}}";
+    const guidePromptSet: PromptSet = [
+      {
+        version: 1,
+        content: guidePromptContent,
+        changeDescription: "Test guide prompt v1",
+        createdAt: new Date().toISOString(),
+        lastModifiedAt: new Date().toISOString(),
+        isActive: true,
+      },
+    ];
+
+    jest.spyOn(fs, "readFileSync").mockImplementation((pathParam) => {
+      const filePathString =
+        typeof pathParam === "string" ? pathParam : pathParam.toString();
+      if (filePathString.includes("generation_guide.json")) {
+        return JSON.stringify(guidePromptSet);
+      }
+      // Fallback for unexpected file reads in this test suite
+      throw new Error(
+        `Unexpected fs.readFileSync call in generate-guide test: ${filePathString}`
       );
+    });
+
     if (fetchSpy) fetchSpy.mockRestore();
   });
   afterEach(() => {

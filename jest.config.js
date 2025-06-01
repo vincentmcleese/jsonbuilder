@@ -23,9 +23,13 @@ const customJestConfig = {
     "^@mswjs/interceptors$":
       "<rootDir>/node_modules/@mswjs/interceptors/lib/node/index.js",
   },
-  preset: "ts-jest",
+  transform: {
+    "^.+\\.(js|jsx|ts|tsx)$": ["babel-jest", { presets: ["next/babel"] }],
+    "^.+\\.mjs$": ["babel-jest", { presets: ["next/babel"] }],
+  },
   transformIgnorePatterns: [
-    "/node_modules/(?!(react-markdown|remark-gfm|rehype-raw|rehype-sanitize|unified|bail|is-plain-obj|trough|vfile.*|unist-util.*|micromark.*|decode-named-character-reference|character-entities|mdast-util.*|zwitch|longest-streak|ccount|markdown-table|estree-util-is-identifier-name|fault|hast.*|html-void-elements|web-namespaces|property-information|space-separated-tokens|comma-separated-tokens|trim-lines|devlop|array-iterate|.+esm.js$|.+mjs$))",
+    "/node_modules/(?!react-markdown/)",
+    "\\.pnp\\.[^\\/]+$",
   ],
 };
 
