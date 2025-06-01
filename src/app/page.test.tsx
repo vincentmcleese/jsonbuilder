@@ -3,7 +3,6 @@ import {
   screen,
   fireEvent,
   waitFor,
-  within,
   cleanup,
 } from "@testing-library/react";
 import HomePage from "./page"; // Adjust path to your HomePage component
@@ -14,6 +13,7 @@ import {
   PromptValidationResponse,
   GenerateRawRequest,
   ClientFacingValidationResponse,
+  GenerateRawApiResponse,
 } from "@/lib/validations";
 import {
   triggerTools,
@@ -59,11 +59,11 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
   });
 
   it("S2: calls validation API, shows loading, then displays successful validation data and enables tool selection", async () => {
-    const mockS2SuccessResponse: ClientFacingValidationResponse = {
+    const mockS2Response: ClientFacingValidationResponse = {
       valid: true,
-      extractedTriggerText: "S2 Success: Extracted Trigger",
-      extractedProcessText: "S2 Success: Extracted Process",
-      extractedActionText: "S2 Success: Extracted Action",
+      extractedTriggerText: "S2 Success Trigger",
+      extractedProcessText: "S2 Success Process",
+      extractedActionText: "S2 Success Action",
       matchedTriggerTool: triggerTools[1],
       matchedProcessTool: processLogicTools[1],
       matchedActionTool: actionTools[1],
@@ -72,33 +72,41 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     };
     server.use(
       http.post("/api/validate-prompt", () => {
-        return HttpResponse.json(mockS2SuccessResponse, { status: 200 });
+        return HttpResponse.json(mockS2Response, { status: 200 });
       })
     );
 
     render(<HomePage />);
     fireEvent.change(
       screen.getByRole("textbox", { name: /Enter automation goal/i }),
-      { target: { value: "Specific S2 success prompt" } } // Changed input value for clarity
+      { target: { value: "S2 success test prompt" } }
     );
     fireEvent.click(screen.getByRole("button", { name: /Validate Prompt/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Prompt Validated!")).toBeInTheDocument();
-      // Move all dependent assertions inside the waitFor
       expect(
         screen.getByText(
-          /AI Understood Trigger: S2 Success: Extracted Trigger/i
+          (content, node) =>
+            node?.textContent ===
+            `AI Understood Trigger: ${mockS2Response.extractedTriggerText}`
         )
       ).toBeInTheDocument();
       expect(
         screen.getByText(
-          /AI Understood Process: S2 Success: Extracted Process/i
+          (content, node) =>
+            node?.textContent ===
+            `AI Understood Process: ${mockS2Response.extractedProcessText}`
         )
       ).toBeInTheDocument();
       expect(
-        screen.getByText(/AI Understood Action: S2 Success: Extracted Action/i)
+        screen.getByText(
+          (content, node) =>
+            node?.textContent ===
+            `AI Understood Action: ${mockS2Response.extractedActionText}`
+        )
       ).toBeInTheDocument();
+
       expect(screen.getByText("Confirm Tools & Model")).toBeInTheDocument();
       expect(
         screen.getByRole("button", {
@@ -109,36 +117,35 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
   });
 
   it("S2: displays feedback and suggestions when prompt validation is not valid", async () => {
-    const mockInvalidResponse: PromptValidationResponse = {
+    const mockInvalidResponse: Partial<ClientFacingValidationResponse> = {
       valid: false,
-      trigger: null,
-      process: null,
-      action: null,
-      feedback: "Prompt is bad.",
-      suggestions: ["Fix it."],
+      feedback: "Prompt is very bad.",
+      suggestions: ["Try again."],
+      extractedTriggerText: null,
+      extractedProcessText: null,
+      extractedActionText: null,
+      matchedTriggerTool: null,
+      matchedProcessTool: null,
+      matchedActionTool: null,
     };
     server.use(
-      http.post("/api/validate-prompt", async () => {
+      http.post("/api/validate-prompt", () => {
         return HttpResponse.json(mockInvalidResponse, { status: 200 });
       })
     );
 
     render(<HomePage />);
-    fireEvent.change(
-      screen.getByRole("textbox", { name: /Enter automation goal/i }),
-      { target: { value: "Invalid prompt" } }
-    );
     fireEvent.click(screen.getByRole("button", { name: /Validate Prompt/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Prompt Needs Improvement")).toBeInTheDocument();
     });
-    expect(screen.getByText("Prompt is bad.")).toBeInTheDocument();
-    expect(screen.getByText("Fix it.")).toBeInTheDocument();
+    expect(screen.getByText("Prompt is very bad.")).toBeInTheDocument();
+    expect(screen.getByText("Try again.")).toBeInTheDocument();
   });
 
   it("S2: shows validation API error if the call fails", async () => {
-    const errorMessage = "Val API Down";
+    const errorMessage = "Val API is Down";
     server.use(
       http.post("/api/validate-prompt", () => {
         return HttpResponse.json({ error: errorMessage }, { status: 500 });
@@ -146,10 +153,6 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     );
 
     render(<HomePage />);
-    fireEvent.change(
-      screen.getByRole("textbox", { name: /Enter automation goal/i }),
-      { target: { value: "Prompt causing error" } }
-    );
     fireEvent.click(screen.getByRole("button", { name: /Validate Prompt/i }));
 
     await waitFor(() => {
@@ -159,177 +162,35 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
   });
 
   // --- Sprint 3 Tests (Tool/Model Selection & Generation Call) ---
-  const setupValidValidationState = async (page: any, user: any) => {
-    const mockValidationResponse: ClientFacingValidationResponse = {
-      valid: true,
-      extractedTriggerText: "AI Trigger: Form submitted",
-      extractedProcessText: "AI Process: Check for urgency",
-      extractedActionText: "AI Action: Notify #general on Slack",
-      matchedTriggerTool: triggerTools[0], // e.g., Webhook Trigger
-      matchedProcessTool: processLogicTools[0], // e.g., Code (Function)
-      matchedActionTool: actionTools[2], // e.g., Slack (Send Message)
-      feedback: null,
-      suggestions: [],
-    };
-    server.use(
-      http.post("/api/validate-prompt", async () =>
-        HttpResponse.json(mockValidationResponse, { status: 200 })
-      )
-    );
-
-    // Pass user to interact with elements rendered by this helper
-    await user.type(
-      page.getByRole("textbox", { name: /Enter automation goal/i }),
-      "Valid prompt for S3/S4"
-    );
-    await user.click(page.getByRole("button", { name: /Validate Prompt/i }));
-    await page.findByText("Confirm Tools & Model"); // Ensure validation UI is shown
-    return mockValidationResponse; // Return the mock data for use in subsequent assertions
-  };
-
-  it("S3/S4: pre-populates tool/model selections, sends all data to generate-raw, and splits output", async () => {
-    const user = userEvent.setup();
-    render(<HomePage />);
-    const validationDataUsed = await setupValidValidationState(screen, user);
-
-    const testUserPromptInput = "Valid prompt for S3/S4";
-    const expectedLlmOutput =
-      '{"n8n": "json_workflow"}---JSON-GUIDE-SEPARATOR---### Guide Header\n- Step 1';
-
-    let capturedRawRequestPayload: GenerateRawRequest | null = null;
-    server.use(
-      http.post("/api/generate-raw", async ({ request }) => {
-        capturedRawRequestPayload =
-          (await request.json()) as GenerateRawRequest;
-        await new Promise((resolve) => setTimeout(resolve, 100)); // Increased delay slightly
-        return HttpResponse.json(
-          { output: expectedLlmOutput },
-          { status: 200 }
-        );
-      })
-    );
-
-    const modelSelectTrigger = screen.getByRole("combobox", {
-      name: /LLM Model/i,
-    });
-    await user.click(modelSelectTrigger);
-    const modelOption = await screen.findByRole("option", {
-      name: llmModels[1],
-    });
-    await user.click(modelOption);
-    // expect(modelSelectTrigger).toHaveTextContent(llmModels[1]); // This assertion can be noisy if click logic is complex
-
-    const initialGenerateButton = screen.getByRole("button", {
-      name: /Generate Workflow with Selections/i,
-    });
-    await user.click(initialGenerateButton);
-
-    // Wait for the button to become disabled (indicates loading state started)
-    await waitFor(() => {
-      expect(initialGenerateButton).toBeDisabled();
-    });
-
-    // Now that it's disabled, its text should have changed, and the paragraph should be visible
-    expect(initialGenerateButton).toHaveTextContent(/Generating Workflow.../i);
-    expect(
-      screen.getByText(/^Generating workflow...$/, { selector: "p" })
-    ).toBeInTheDocument();
-
-    // Wait for the final output to appear
-    await waitFor(() =>
-      expect(screen.getByText('{"n8n": "json_workflow"}')).toBeInTheDocument()
-    );
-    expect(screen.getByText(/^### Guide Header/)).toBeInTheDocument();
-
-    // Verify payload (assertions from before)
-    expect(capturedRawRequestPayload).not.toBeNull();
-    if (capturedRawRequestPayload) {
-      expect(capturedRawRequestPayload.userNaturalLanguagePrompt).toBe(
-        testUserPromptInput
-      );
-      expect(capturedRawRequestPayload.selectedTriggerTool).toBe(
-        validationDataUsed.matchedTriggerTool
-      );
-      expect(capturedRawRequestPayload.selectedProcessLogicTool).toBe(
-        validationDataUsed.matchedProcessTool
-      );
-      expect(capturedRawRequestPayload.selectedActionTool).toBe(
-        validationDataUsed.matchedActionTool
-      );
-      expect(capturedRawRequestPayload.selectedLlmModel).toBe(llmModels[1]); // User changed this
-      expect(capturedRawRequestPayload.aiExtractedTrigger).toBe(
-        validationDataUsed.extractedTriggerText
-      );
-      expect(capturedRawRequestPayload.aiExtractedProcess).toBe(
-        validationDataUsed.extractedProcessText
-      );
-      expect(capturedRawRequestPayload.aiExtractedAction).toBe(
-        validationDataUsed.extractedActionText
-      );
-    }
-
-    // Wait for the button to revert to its original state
-    await waitFor(() => {
-      // Query by its final expected text to ensure it's the correct button state
-      const finalButton = screen.getByRole("button", {
-        name: /Generate Workflow with Selections/i,
-      });
-      expect(finalButton).not.toBeDisabled();
-    });
-    expect(
-      screen.queryByText(/^Generating workflow...$/, { selector: "p" })
-    ).not.toBeInTheDocument();
-  });
-
-  // Remove or adapt other S3 tests if they are now redundant with the above comprehensive test
-  // For example, 'S3: allows user to change tool and model selections' is partly covered.
-  // 'S3: pre-populates tool/model selections...' is also covered if setupValidValidationState is trusted.
-  // 'S3: shows error from /api/generate-raw...' is still a valid standalone error case test.
-
-  // Keep: S3: shows error from /api/generate-raw if generation fails
-  it("S3: shows error from /api/generate-raw if generation fails", async () => {
-    const user = userEvent.setup();
-    await setupValidValidationState(screen, user); // Pass screen and user
-    const generationErrorMessage = "LLM Generation Failed";
-    server.use(
-      http.post("/api/generate-raw", () =>
-        HttpResponse.json({ error: generationErrorMessage }, { status: 500 })
-      )
-    );
-    await user.click(
-      screen.getByRole("button", { name: /Generate Workflow with Selections/i })
-    );
-    await waitFor(() =>
-      expect(screen.getByText("Workflow Generation Error")).toBeInTheDocument()
-    );
-    expect(screen.getByText(generationErrorMessage)).toBeInTheDocument();
-  });
-
-  const setupToToolSelectionStage = async (
+  const setupToToolSelectionStageAndGetDefaults = async (
     user: ReturnType<typeof userEvent.setup>
   ) => {
-    render(<HomePage />); // Render should happen inside the test or a more specific setup for that test.
+    // Default MSW handler for /api/validate-prompt will be used (from src/mocks/handlers.ts)
     await user.type(
       screen.getByRole("textbox", { name: /Enter automation goal/i }),
-      "Test prompt to reach selections"
+      "Test prompt for S3 setup"
     );
     await user.click(screen.getByRole("button", { name: /Validate Prompt/i }));
     await screen.findByText("Confirm Tools & Model");
+    // This is what the default handler in src/mocks/handlers.ts returns:
+    const defaultMockData: ClientFacingValidationResponse = {
+      valid: true,
+      extractedTriggerText: "Default extracted trigger",
+      extractedProcessText: "Default extracted process",
+      extractedActionText: "Default extracted action",
+      matchedTriggerTool: triggerTools[0],
+      matchedProcessTool: processLogicTools[0],
+      matchedActionTool: actionTools[0],
+      feedback: null,
+      suggestions: [],
+    };
+    return defaultMockData;
   };
 
   it("S3: pre-populates with default matched tools after validation", async () => {
     const user = userEvent.setup();
-    // This test depends on the default MSW handler for /api/validate-prompt
-    // which returns defaultValidationSuccess from src/mocks/handlers.ts
-    // Ensure defaultValidationSuccess uses known tool names for these assertions to be meaningful
-    render(<HomePage />); // Render specific to this test
-    await user.type(
-      screen.getByRole("textbox", { name: /Enter automation goal/i }),
-      "Test for default pre-population"
-    );
-    await user.click(screen.getByRole("button", { name: /Validate Prompt/i }));
-    await screen.findByText("Confirm Tools & Model");
-
+    render(<HomePage />);
+    await setupToToolSelectionStageAndGetDefaults(user);
     expect(
       screen.getByRole("combobox", { name: /Trigger Tool/i })
     ).toHaveTextContent(triggerTools[0]);
@@ -346,9 +207,8 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
 
   it("S3: allows user to change tool and model selections", async () => {
     const user = userEvent.setup();
-    // Uses default /api/validate-prompt handler to show selection UI
-    await setupToToolSelectionStage(user); // Calls render itself
-
+    render(<HomePage />);
+    await setupToToolSelectionStageAndGetDefaults(user);
     await selectShadcnOption(user, /Trigger Tool/i, triggerTools[1]);
     expect(
       screen.getByRole("combobox", { name: /Trigger Tool/i })
@@ -360,70 +220,134 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     ).toHaveTextContent(llmModels[1]);
   });
 
-  it("S3: calls /api/generate-raw with selected data and displays output", async () => {
+  it("S3/S4: calls /api/generate-raw, displays JSON validity, and separated content", async () => {
     const user = userEvent.setup();
-    // Uses default /api/validate-prompt handler via setupToToolSelectionStage
-    await setupToToolSelectionStage(user);
-
-    const testUserPromptInput = "Test prompt to reach selections"; // From setupToToolSelectionStage
-    const expectedOutputForThisTest =
-      "Custom S3 JSON---JSON-GUIDE-SEPARATOR---Custom S3 Guide";
-    let capturedPayload: GenerateRawRequest | null = null;
-
-    // User changes one selection
-    await selectShadcnOption(user, /Action Tool/i, actionTools[1]);
-    await selectShadcnOption(user, /LLM Model/i, llmModels[2]); // Change model too
+    render(<HomePage />);
+    const validationDataUsed = await setupToToolSelectionStageAndGetDefaults(
+      user
+    );
+    const testUserPromptInput = "Test prompt for S3 setup";
+    const expectedLlmOutput =
+      '{"n8n": "json_workflow"}---JSON-GUIDE-SEPARATOR---### Guide Header\n- Step 1';
+    let capturedRawRequestPayload: GenerateRawRequest | null = null;
 
     server.use(
       http.post("/api/generate-raw", async ({ request }) => {
-        capturedPayload = (await request.json()) as GenerateRawRequest;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        capturedRawRequestPayload =
+          (await request.json()) as GenerateRawRequest;
+        await new Promise((resolve) => setTimeout(resolve, 100));
         return HttpResponse.json(
-          { output: expectedOutputForThisTest },
+          {
+            output: expectedLlmOutput,
+            isJsonSyntaxValid: true,
+            generatedJsonString: '{"n8n": "json_workflow"}',
+            generatedGuideString: "### Guide Header\n- Step 1",
+          },
           { status: 200 }
         );
       })
     );
 
-    const generateButton = screen.getByRole("button", {
+    await selectShadcnOption(user, /Action Tool/i, actionTools[1]);
+    await selectShadcnOption(user, /LLM Model/i, llmModels[1]);
+
+    const initialGenerateButton = screen.getByRole("button", {
       name: /Generate Workflow with Selections/i,
     });
-    await user.click(generateButton);
-    await waitFor(() =>
-      expect(generateButton).toHaveTextContent(/Generating Workflow.../i)
-    );
+    await user.click(initialGenerateButton);
+
+    await waitFor(() => {
+      expect(initialGenerateButton).toBeDisabled();
+    });
+
+    expect(initialGenerateButton).toHaveTextContent(/Generating Workflow.../i);
+    expect(
+      screen.getByText(/^Generating workflow...$/, { selector: "p" })
+    ).toBeInTheDocument();
 
     await waitFor(() =>
-      expect(screen.getByText("Custom S3 JSON")).toBeInTheDocument()
-    );
-    expect(screen.getByText("Custom S3 Guide")).toBeInTheDocument();
-
-    expect(capturedPayload).not.toBeNull();
-    // Cast to any to bypass persistent TypeScript type narrowing issues for these assertions
-    const payloadForAssertion = capturedPayload as any;
-    expect(payloadForAssertion.userNaturalLanguagePrompt).toBe(
-      testUserPromptInput
-    );
-    expect(payloadForAssertion.selectedTriggerTool).toBe(triggerTools[0]);
-    expect(payloadForAssertion.selectedProcessLogicTool).toBe(
-      processLogicTools[0]
-    );
-    expect(payloadForAssertion.selectedActionTool).toBe(actionTools[1]);
-    expect(payloadForAssertion.selectedLlmModel).toBe(llmModels[2]);
-    expect(payloadForAssertion.aiExtractedTrigger).toBe(
-      "Default extracted trigger"
-    );
-    expect(payloadForAssertion.aiExtractedProcess).toBe(
-      "Default extracted process"
-    );
-    expect(payloadForAssertion.aiExtractedAction).toBe(
-      "Default extracted action"
+      expect(screen.getByText("Generated JSON is Valid!")).toBeInTheDocument()
     );
 
-    await waitFor(() =>
-      expect(generateButton).toHaveTextContent(
-        /Generate Workflow with Selections/i
+    expect(screen.getByText('{"n8n": "json_workflow"}')).toBeInTheDocument();
+    expect(screen.getByText(/^### Guide Header/)).toBeInTheDocument();
+
+    expect(capturedRawRequestPayload).not.toBeNull();
+    if (capturedRawRequestPayload) {
+      expect(capturedRawRequestPayload.userNaturalLanguagePrompt).toBe(
+        testUserPromptInput
+      );
+      expect(capturedRawRequestPayload.selectedTriggerTool).toBe(
+        validationDataUsed.matchedTriggerTool
+      );
+      expect(capturedRawRequestPayload.selectedProcessLogicTool).toBe(
+        validationDataUsed.matchedProcessTool
+      );
+      expect(capturedRawRequestPayload.selectedActionTool).toBe(actionTools[1]);
+      expect(capturedRawRequestPayload.selectedLlmModel).toBe(llmModels[1]);
+      expect(capturedRawRequestPayload.aiExtractedTrigger).toBe(
+        validationDataUsed.extractedTriggerText
+      );
+      expect(capturedRawRequestPayload.aiExtractedProcess).toBe(
+        validationDataUsed.extractedProcessText
+      );
+      expect(capturedRawRequestPayload.aiExtractedAction).toBe(
+        validationDataUsed.extractedActionText
+      );
+    }
+
+    await waitFor(() => {
+      const finalButton = screen.getByRole("button", {
+        name: /Generate Workflow with Selections/i,
+      });
+      expect(finalButton).not.toBeDisabled();
+    });
+    expect(
+      screen.queryByText(/^Generating workflow...$/, { selector: "p" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("S3: shows general error from /api/generate-raw if API call fails (e.g. 500)", async () => {
+    const user = userEvent.setup();
+    render(<HomePage />);
+    await setupToToolSelectionStageAndGetDefaults(user);
+    const generationErrorMessage = "LLM Service Unavailable";
+    server.use(
+      http.post("/api/generate-raw", () =>
+        HttpResponse.json({ error: generationErrorMessage }, { status: 503 })
       )
     );
+    await user.click(
+      screen.getByRole("button", { name: /Generate Workflow with Selections/i })
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Workflow Generation Error")).toBeInTheDocument()
+    );
+    expect(screen.getByText(generationErrorMessage)).toBeInTheDocument();
+  });
+
+  it("S3/S5: shows JSON syntax error from /api/generate-raw", async () => {
+    const user = userEvent.setup();
+    render(<HomePage />);
+    await setupToToolSelectionStageAndGetDefaults(user);
+    const mockJsonErrorResponse: GenerateRawApiResponse = {
+      rawLlmOutput: "invalid json---JSON-GUIDE-SEPARATOR---Guide here",
+      generatedJsonString: "invalid json",
+      generatedGuideString: "Guide here",
+      isJsonSyntaxValid: false,
+      jsonSyntaxErrorMessage: "Syntax error at position 0",
+    };
+    server.use(
+      http.post("/api/generate-raw", () =>
+        HttpResponse.json(mockJsonErrorResponse, { status: 200 })
+      )
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Generate Workflow with Selections/i })
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Generated JSON Invalid")).toBeInTheDocument()
+    );
+    expect(screen.getByText(/Syntax error at position 0/i)).toBeInTheDocument();
   });
 });

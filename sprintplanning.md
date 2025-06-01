@@ -101,61 +101,85 @@
 
 ---
 
-**Sprint 4: LLM Prompt Enhancement with Tool & Model Selection & Basic JSON Display**
+**Sprint 4: LLM N8N JSON Generation & Display**
 
-- **Goal:** Have the LLM (chosen via OpenRouter) use the selected tools in its generation process and display the JSON part more clearly.
+- **Goal:** Have the LLM (chosen via OpenRouter) generate _only the n8n JSON workflow_ based on the user's validated prompt, selected tools, and chosen model. Display this JSON clearly.
 - **Key Features/Tasks:**
-  1.  **Tool-Aware and Model-Aware LLM Prompt (Backend):**
-      - `INSTRUCTIONS.md` (v1.0): Significantly update to instruct the LLM to generate a workflow specifically using the user-selected Trigger, Process, and Action tools.
-      - Dynamically insert tool names into the prompt sent to the LLM.
-      - Pass the user-selected model and version to OpenRouter.
-      - Include the validated prompt components from Sprint 2.
-      - _Bonus (if time allows):_ Start injecting very simple structural examples for the _types_ of selected nodes from `n8n_Cheat_Sheet_Guide.md` into the prompt.
-  2.  **Separate JSON/Guide Display (Frontend):**
-      - Assume the LLM _attempts_ to provide JSON and a guide (even if still in one block of text).
-      - Make a basic attempt to split the LLM response if a clear delimiter is used (e.g., "JSON:\n---\nGUIDE:\n---").
-      - Display the (assumed) JSON portion in a `<pre>` tag for better formatting.
-- **Demonstrable Value:** User's validated prompt, selected tools, and chosen model/version result in LLM output that references and uses those specific tools. The JSON part looks more like JSON.
-- **User Requirements Addressed (Partially):**
-  - LLM prompt templating (now tool-aware and validation-aware)
-  - JSON + guide generation (output quality improving)
-  - **NEW:** LLM Model and Version Selection (actively used in generation)
+  1.  **Tool-Aware LLM Prompt for JSON Generation (Backend):**
+      - `prompts/generation/INSTRUCTIONS.md` (v2.0): Significantly update to instruct the LLM to generate _only a valid n8n JSON workflow object/string_, specifically using the user-selected Trigger, Process, and Action tools, the user's natural language prompt, and the AI-extracted components from validation.
+      - The API route (`/api/generate-raw`) will dynamically insert all these details into the prompt sent to the LLM.
+      - The API will ensure the LLM is prompted to return _only JSON_ (e.g., using JSON mode if available, or explicit instructions).
+  2.  **Clear JSON Display (Frontend):**
+      - The `/api/generate-raw` endpoint will now aim to return just the n8n JSON string (or an object that contains it and a validity status, TBD in Sprint 5).
+      - Display the generated JSON portion in a `<pre>` tag with appropriate styling for readability (e.g., syntax highlighting if simple to add, otherwise plain preformatted text).
+      - Remove any logic related to splitting JSON and Guide from a single LLM string output for this endpoint.
+- **Demonstrable Value:** User's validated prompt, selected tools, and chosen model/version result in the LLM generating an n8n JSON workflow. This JSON is then displayed clearly to the user.
+- **User Requirements Addressed (Partially/Focused):**
+  - LLM prompt templating (now tool-aware and focused on JSON output)
+  - JSON generation (primary focus)
+  - Output Display (JSON part only for now)
+  - **NEW:** LLM Model and Version Selection (actively used in JSON generation)
 
 ---
 
-**Sprint 5: Basic JSON Validation & User Feedback**
+**Sprint 5: N8N JSON Syntax Validation & User Feedback**
 
-- **Goal:** Implement syntax validation for the generated JSON and inform the user.
+- **Goal:** Implement syntax validation for the n8n JSON generated in Sprint 4 and inform the user.
 - **Key Features/Tasks:**
   1.  **JSON Syntax Validation (Backend):**
-      - In the API route, after receiving the LLM response, attempt to `JSON.parse()` the part identified as the n8n workflow.
-      - If parsing fails, note it as an error.
+      - In the `/api/generate-raw` API route, after receiving the LLM's response (which should be the n8n JSON string):
+        - Attempt to `JSON.parse()` the string.
+        - The API response to the client should be enhanced to include: the (potentially unparsed) JSON string from the LLM, a boolean `isJsonSyntaxValid`, and any `jsonSyntaxErrorMessage`.
   2.  **Validation Feedback (Frontend):**
-      - Display a message to the user if JSON validation failed (e.g., "Generated JSON is not valid.") or succeeded.
-- **Demonstrable Value:** The app now checks if the LLM produced syntactically valid JSON and tells the user.
+      - Display a clear message to the user based on `isJsonSyntaxValid` and `jsonSyntaxErrorMessage` (e.g., "Generated n8n JSON is valid!" or "Generated n8n JSON is invalid: [error message]").
+- **Demonstrable Value:** The app checks if the LLM produced syntactically valid n8n JSON and clearly informs the user.
 - **User Requirements Addressed:**
-  - JSON schema validation (syntax check only)
+  - JSON schema validation (syntax check for n8n JSON)
 
 ---
 
-**Sprint 6: Instructional Guide Display & Basic Copy/Download**
+**Sprint 6: Generate Instructional Guide (New)**
 
-- **Goal:** Improve the display of the instructional guide and allow users to copy the outputs.
+- **Goal:** Generate an instructional guide in Markdown format based on the previously generated and validated n8n JSON workflow.
+- **Key Features/Tasks:**
+  1.  **New API Route for Guide Generation (Backend):**
+      - Create a new Next.js API route (e.g., `/api/generate-guide`).
+      - This route will accept:
+        - The validated n8n JSON string (from Sprint 4/5).
+        - The original user natural language prompt.
+        - The AI-extracted trigger, process, action texts.
+        - The user-selected tool names.
+        - The selected LLM model.
+  2.  **LLM Prompt for Guide Generation (Backend):**
+      - Create a new prompt file (e.g., `prompts/generation/GUIDE_INSTRUCTIONS.md`).
+      - This prompt will instruct the LLM to generate a step-by-step instructional guide in Markdown, explaining the provided n8n JSON workflow in the context of the user's goal and selected tools.
+  3.  **Frontend Call and Basic Display:**
+      - After successful JSON generation (and validation in Sprint 5), the frontend will make a call to `/api/generate-guide`.
+      - Display the returned Markdown guide text in a simple way (e.g., within a `<pre>` tag or a basic `div`). Markdown rendering is for a subsequent sprint.
+- **Demonstrable Value:** After generating a valid n8n JSON workflow, the user can trigger the generation of a textual, step-by-step guide explaining that workflow.
+- **User Requirements Addressed (Partially):**
+  - Instructional Guide Generation (generation part)
+
+---
+
+**Sprint 7: Instructional Guide Display (Markdown Rendering) & Copy/Download (Was Old Sprint 6)**
+
+- **Goal:** Improve the display of the instructional guide using Markdown rendering and allow users to copy/download both the n8n JSON and the guide.
 - **Key Features/Tasks:**
   1.  **Instructional Guide Rendering (Frontend):**
-      - If the LLM is instructed to produce Markdown for the guide, use a library like `react-markdown` to render it nicely.
+      - Use a library like `react-markdown` to render the Markdown guide (generated in New Sprint 6) nicely.
   2.  **Copy to Clipboard (Frontend):**
       - Add "Copy JSON" and "Copy Guide" buttons.
   3.  **Download Functionality (Frontend - Basic):**
-      - Add "Download JSON" and "Download Guide" buttons that save the respective content as `.json` and `.txt` (or `.md`) files.
-- **Demonstrable Value:** The instructional guide is well-formatted. Users can easily copy or download the generated JSON and guide.
+      - Add "Download JSON" and "Download Guide" buttons that save the respective content as `.json` and `.md` files.
+- **Demonstrable Value:** The instructional guide is well-formatted. Users can easily copy or download the generated n8n JSON and guide.
 - **User Requirements Addressed:**
   - Output Display (guide rendering)
   - Copy/download (JSON + guide)
 
 ---
 
-**Sprint 7: Visual Workflow Preview (Simple Node Map)**
+**Sprint 8: Visual Workflow Preview (Simple Node Map)**
 
 - **Goal:** Display a very simple visual representation of the generated workflow.
 - **Key Features/Tasks:**
@@ -170,7 +194,7 @@
 
 ---
 
-**Sprint 8: Go Back/Restart & Structural JSON Validation**
+**Sprint 9: Go Back/Restart & Structural JSON Validation**
 
 - **Goal:** Allow users to restart the process and add more robust JSON validation.
 - **Key Features/Tasks:**
@@ -188,7 +212,7 @@
 
 ---
 
-**Sprint 9: Save/Version (Local Storage) & Polish**
+**Sprint 10: Save/Version (Local Storage) & Polish**
 
 - **Goal:** Implement local saving of workflows (including model/version used) and general UI/UX polish.
 - **Key Features/Tasks:**
@@ -206,7 +230,7 @@
 
 ---
 
-**Sprint 10: Prompt Versioning & Admin Interface**
+**Sprint 11: Prompt Versioning & Admin Interface**
 
 - **Goal:** Implement versioned system prompts and an admin interface for managing them.
 - **Key Features/Tasks:**

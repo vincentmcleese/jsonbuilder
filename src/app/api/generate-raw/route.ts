@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { GenerateRawRequestSchema } from "@/lib/validations";
+import {
+  GenerateRawRequestSchema,
+  type GenerateRawApiResponse,
+  GenerateRawApiResponseSchema,
+} from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +22,7 @@ export async function POST(req: NextRequest) {
     let requestBody;
     try {
       requestBody = await req.json();
-    } catch (e) {
+    } catch (_parseError) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
@@ -92,7 +96,7 @@ export async function POST(req: NextRequest) {
       selectedActionTool || "N/A"
     );
 
-    const response = await fetch(
+    const llmApiCall = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
@@ -103,50 +107,95 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           model: selectedLlmModel,
           messages: [
-            { role: "system", content: "You are a helpful assistant." },
+            {
+              role: "system",
+              content: "You are an AI assistant that only outputs valid JSON.",
+            },
             { role: "user", content: finalPrompt },
           ],
+          response_format: { type: "json_object" },
         }),
       }
     );
 
-    if (!response.ok) {
-      const errorData = await response
+    if (!llmApiCall.ok) {
+      const errorData = await llmApiCall
         .json()
-        .catch(() => ({ error: "Unknown error fetching from OpenRouter" }));
-      console.error("OpenRouter API error:", response.status, errorData);
+        .catch(() => ({ error: "Unknown error from LLM" }));
+      console.error(
+        "OpenRouter API error (generate-raw):",
+        llmApiCall.status,
+        errorData
+      );
       return NextResponse.json(
         {
-          error: `Failed to fetch from LLM: ${response.statusText}`,
+          error: `LLM API request failed: ${llmApiCall.statusText}`,
           details: errorData,
         },
-        { status: response.status }
+        { status: llmApiCall.status }
       );
     }
 
-    const data = await response.json();
+    const rawLlmResponseData = await llmApiCall.json();
+    const llmOutputString = rawLlmResponseData.choices?.[0]?.message?.content;
 
-    const llmOutput =
-      data.choices &&
-      data.choices[0] &&
-      data.choices[0].message &&
-      data.choices[0].message.content;
+    let apiResponse: GenerateRawApiResponse;
 
-    if (!llmOutput) {
-      console.error("Unexpected response structure from OpenRouter:", data);
-      return NextResponse.json(
-        { error: "Unexpected response structure from LLM." },
-        { status: 500 }
+    if (
+      !llmOutputString ||
+      typeof llmOutputString !== "string" ||
+      llmOutputString.trim() === ""
+    ) {
+      console.error(
+        "LLM did not return expected non-empty JSON string (generate-raw):",
+        rawLlmResponseData
       );
+      apiResponse = {
+        generatedJsonString: llmOutputString || null, // Pass along even if empty/null for context
+        isJsonSyntaxValid: false,
+        jsonSyntaxErrorMessage:
+          "LLM response was empty or not in the expected string format.",
+      };
+    } else {
+      const trimmedLlmOutput = llmOutputString.trim();
+      try {
+        JSON.parse(trimmedLlmOutput); // Attempt to parse
+        apiResponse = {
+          generatedJsonString: trimmedLlmOutput,
+          isJsonSyntaxValid: true,
+          jsonSyntaxErrorMessage: null,
+        };
+      } catch (e) {
+        apiResponse = {
+          generatedJsonString: trimmedLlmOutput,
+          isJsonSyntaxValid: false,
+          jsonSyntaxErrorMessage:
+            e instanceof Error ? e.message : "Unknown JSON parsing error.",
+        };
+        console.error(
+          "Error parsing generated JSON from LLM:",
+          apiResponse.jsonSyntaxErrorMessage
+        );
+      }
     }
 
-    return NextResponse.json({ output: llmOutput });
+    return NextResponse.json(apiResponse);
   } catch (error) {
     console.error("Error in /api/generate-raw:", error);
-    let errorMessage = "An unexpected error occurred.";
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    // For generic server errors, still return a simple error object
+    const errorResponse = {
+      error:
+        error instanceof Error
+          ? error.message
+          : "An unexpected server error occurred.",
+      // Ensure structure matches what tests might expect for general errors, if different from GenerateRawApiResponse
+      generatedJsonString: null,
+      isJsonSyntaxValid: false,
+      jsonSyntaxErrorMessage:
+        error instanceof Error
+          ? error.message
+          : "An unexpected server error occurred.",
+    };
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }

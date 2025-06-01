@@ -23,6 +23,7 @@ import {
 import type {
   ClientFacingValidationResponse,
   GenerateRawRequest,
+  GenerateRawApiResponse,
 } from "@/lib/validations";
 import {
   triggerTools,
@@ -49,14 +50,13 @@ export default function HomePage() {
   const [selectedModel, setSelectedModel] = useState<string>(llmModels[0]); // Default to first model
   const [showSelections, setShowSelections] = useState(false);
 
-  // Raw Generation States (S1, now S3 target)
+  // Simplified state for S4 generation output
   const [rawGenerationLoading, setRawGenerationLoading] = useState(false);
   const [rawGenerationError, setRawGenerationError] = useState<string | null>(
     null
   );
-  const [llmOutput, setLlmOutput] = useState<string | null>(null);
-  const [generatedJson, setGeneratedJson] = useState<string | null>(null);
-  const [generatedGuide, setGeneratedGuide] = useState<string | null>(null);
+  const [generationResult, setGenerationResult] =
+    useState<GenerateRawApiResponse | null>(null);
 
   // Effect to pre-populate selections when validationData is successful
   useEffect(() => {
@@ -77,34 +77,13 @@ export default function HomePage() {
     }
   }, [validationData]);
 
-  // New useEffect to split llmOutput into JSON and Guide
-  useEffect(() => {
-    if (llmOutput) {
-      const separator = "---JSON-GUIDE-SEPARATOR---";
-      const parts = llmOutput.split(separator);
-      if (parts.length === 2) {
-        setGeneratedJson(parts[0].trim());
-        setGeneratedGuide(parts[1].trim());
-      } else {
-        // Fallback if separator is not found or structure is unexpected
-        setGeneratedJson(llmOutput); // Put everything in JSON as a fallback
-        setGeneratedGuide(
-          "Could not automatically separate JSON and Guide. The full output is shown in the JSON section."
-        );
-      }
-    } else {
-      setGeneratedJson(null);
-      setGeneratedGuide(null);
-    }
-  }, [llmOutput]);
-
   async function handleValidatePrompt() {
     setValidationApiLoading(true);
     setValidationApiError(null);
     setValidationData(null);
     setShowSelections(false); // Hide selections during new validation
     setRawGenerationError(null); // Clear previous generation errors
-    setLlmOutput(null); // Clear previous output
+    setGenerationResult(null); // Clear previous generation result
 
     try {
       const response = await fetch("/api/validate-prompt", {
@@ -134,9 +113,7 @@ export default function HomePage() {
     }
     setRawGenerationLoading(true);
     setRawGenerationError(null);
-    setLlmOutput(null);
-    setGeneratedJson(null);
-    setGeneratedGuide(null);
+    setGenerationResult(null);
 
     const payload: GenerateRawRequest = {
       userNaturalLanguagePrompt: userPromptInput,
@@ -156,9 +133,13 @@ export default function HomePage() {
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || `Generation request failed`);
-      setLlmOutput(data.output);
+      if (!response.ok) {
+        const errorMsg =
+          (data as any)?.error ||
+          `Generation request failed: ${response.statusText}`;
+        throw new Error(errorMsg);
+      }
+      setGenerationResult(data as GenerateRawApiResponse);
     } catch (err) {
       setRawGenerationError(
         err instanceof Error ? err.message : "Generation error"
@@ -170,9 +151,7 @@ export default function HomePage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-start p-8 space-y-6">
-      <h1 className="text-3xl font-bold">
-        n8n Workflow Generator (Sprint 3 Refined)
-      </h1>
+      <h1 className="text-3xl font-bold">n8n Workflow Generator (Sprint 5)</h1>
 
       <div className="w-full max-w-2xl space-y-4">
         <label htmlFor="userPrompt" className="block text-sm font-medium">
@@ -341,9 +320,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {rawGenerationLoading && !llmOutput && (
-        <p className="mt-4">Generating workflow with selected tools...</p>
-      )}
+      {rawGenerationLoading && <p className="mt-4">Generating n8n JSON...</p>}
       {rawGenerationError && (
         <Alert variant="destructive" className="w-full max-w-2xl mt-4">
           <Terminal className="h-4 w-4" />
@@ -352,36 +329,41 @@ export default function HomePage() {
         </Alert>
       )}
 
-      {/* Separated JSON and Guide Display */}
-      {generatedJson && (
-        <div className="w-full max-w-4xl p-4 mt-6 border rounded-md bg-gray-900 text-gray-100 dark:bg-gray-800">
+      {generationResult && !generationResult.isJsonSyntaxValid && (
+        <Alert variant="destructive" className="w-full max-w-2xl mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Generated JSON Invalid</AlertTitle>
+          <AlertDescription>
+            {generationResult.jsonSyntaxErrorMessage ||
+              "The LLM output could not be parsed as valid JSON."}
+          </AlertDescription>
+        </Alert>
+      )}
+      {generationResult && generationResult.isJsonSyntaxValid && (
+        <Alert
+          variant="default"
+          className="w-full max-w-2xl mt-4 bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700"
+        >
+          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertTitle className="text-green-700 dark:text-green-300">
+            Generated JSON is Valid!
+          </AlertTitle>
+          <AlertDescription className="text-green-700 dark:text-green-500">
+            The generated n8n workflow JSON is syntactically correct.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {generationResult?.generatedJsonString && (
+        <div className="w-full max-w-4xl p-4 mt-2 border rounded-md bg-gray-900 text-gray-100 dark:bg-gray-800">
           <h3 className="text-lg font-semibold mb-2 text-gray-50">
             Generated n8n Workflow JSON:
           </h3>
           <pre className="whitespace-pre-wrap text-sm overflow-x-auto">
-            {generatedJson}
+            {generationResult.generatedJsonString}
           </pre>
         </div>
       )}
-      {generatedGuide && (
-        <div className="w-full max-w-4xl p-4 mt-4 border rounded-md bg-gray-100 dark:bg-gray-700">
-          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
-            Instructional Guide:
-          </h3>
-          {/* For S4, simple text display. Markdown rendering can be S6. */}
-          <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">
-            {generatedGuide}
-          </pre>
-        </div>
-      )}
-
-      {/* Fallback for llmOutput if not separated (can be removed if confident in separation) */}
-      {/* {!generatedJson && !generatedGuide && llmOutput && (
-        <div className="w-full max-w-4xl p-4 mt-6 border rounded-md bg-gray-50 dark:bg-gray-800">
-          <h2 className="text-xl font-semibold mb-2">Raw LLM Output (could not separate):</h2>
-          <pre className="whitespace-pre-wrap text-sm">{llmOutput}</pre>
-        </div>
-      )} */}
     </main>
   );
 }

@@ -90,3 +90,22 @@ export const ClientFacingValidationResponseSchema = z.object({
 export type ClientFacingValidationResponse = z.infer<
   typeof ClientFacingValidationResponseSchema
 >;
+
+// Schema for the response from /api/generate-raw TO THE CLIENT (Sprint 5 Update)
+export const GenerateRawApiResponseSchema = z.object({
+  generatedJsonString: z
+    .string()
+    .nullable()
+    .describe("The string from LLM, intended to be n8n JSON workflow."),
+  isJsonSyntaxValid: z
+    .boolean()
+    .describe("True if generatedJsonString was successfully parsed as JSON."),
+  jsonSyntaxErrorMessage: z
+    .string()
+    .nullable()
+    .describe("Error message if JSON parsing failed."),
+});
+
+export type GenerateRawApiResponse = z.infer<
+  typeof GenerateRawApiResponseSchema
+>;

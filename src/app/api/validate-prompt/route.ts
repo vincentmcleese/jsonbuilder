@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { z } from "zod";
 import {
   PromptValidationResponseSchema,
-  ClientFacingValidationResponseSchema,
   type ClientFacingValidationResponse,
 } from "@/lib/validations";
 import {
@@ -41,7 +39,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { userPrompt } = requestBody || {};
     const userPromptValue = requestBody?.userPrompt;
 
     if (typeof userPromptValue !== "string" || userPromptValue.trim() === "") {

@@ -1,13 +1,9 @@
 import { http, HttpResponse } from "msw";
-import type {
-  ClientFacingValidationResponse,
-  GenerateRawRequest,
-} from "@/lib/validations";
+import type { ClientFacingValidationResponse } from "@/lib/validations";
 import {
   triggerTools,
   processLogicTools,
   actionTools,
-  llmModels,
 } from "@/lib/toolOptions";
 
 // Default successful response for /api/validate-prompt
@@ -35,14 +31,14 @@ export const handlers = [
   // }),
 
   // Handler for /api/validate-prompt
-  http.post("/api/validate-prompt", async ({ request }) => {
+  http.post("/api/validate-prompt", async ({ request: _request }) => {
     // This default handler doesn't inspect the request body, just returns success.
     // Tests needing specific request body checks will override this.
     return HttpResponse.json(defaultValidationSuccess, { status: 200 });
   }),
 
   // Handler for /api/generate-raw
-  http.post("/api/generate-raw", async ({ request }) => {
+  http.post("/api/generate-raw", async ({ request: _request }) => {
     // This default handler also doesn't inspect the body deeply for default success.
     // It uses the first LLM model if not overridden.
     // const body = await request.json() as GenerateRawRequest;

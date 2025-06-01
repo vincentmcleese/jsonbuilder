@@ -12,14 +12,11 @@ import {
   triggerTools,
   processLogicTools,
   actionTools,
-  triggerToolKeywords,
-  processLogicToolKeywords,
-  actionToolKeywords,
 } from "@/lib/toolOptions";
 import { z } from "zod";
 
 // Mock a minimal NextRequest object
-const mockRequest = (body?: any) => {
+const mockRequest = (body?: unknown) => {
   return {
     json: async () => body,
   } as NextRequest;
@@ -218,13 +215,11 @@ describe("/api/validate-prompt API endpoint (Sprint 3 Refined)", () => {
   });
 
   it("should return 500 if LLM response content is missing during validation", async () => {
-    fetchSpy = jest
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ choices: [{ message: {} }] }), {
-          status: 200,
-        })
-      );
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ choices: [{ message: {} }] }), {
+        status: 200,
+      })
+    );
     const response = await POST(mockRequest({ userPrompt: "test" }));
     expect(response.status).toBe(500);
     expect(await response.json()).toHaveProperty(
