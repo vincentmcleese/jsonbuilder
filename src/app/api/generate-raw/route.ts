@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
     let requestBody;
     try {
       requestBody = await req.json();
-    } catch (_) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     console.log(
       `Using main generation prompt template version: ${activeMainGenPrompt.version}`
     );
-    let promptTemplate = activeMainGenPrompt.content;
+    const promptTemplate = activeMainGenPrompt.content;
 
     const activeTrainingData = getActivePrompt(
       PromptType.GenerationMainTrainingData

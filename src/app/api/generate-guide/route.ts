@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
     let requestBody;
     try {
       requestBody = await req.json();
-    } catch (_) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       return NextResponse.json(
         { error: "Invalid JSON body for guide generation." },
         { status: 400 }

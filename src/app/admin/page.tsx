@@ -360,7 +360,7 @@ const AdminPanel = () => {
                 id="changeDescription"
                 value={changeDescription}
                 onChange={(e) => setChangeDescription(e.target.value)}
-                placeholder="Describe the changes or purpose of this new version..."
+                placeholder="describe the changes and purpose of of this new version"
                 rows={2}
                 required
                 className="bg-background"
@@ -373,7 +373,7 @@ const AdminPanel = () => {
 
           {!selectedVersionDetails && !isEditing && (
             <div className="text-center text-muted-foreground p-10 border rounded-md h-96 flex items-center justify-center">
-              Select a version to view, or click "Create New Version".
+              Select a version to view, or click &quot;Create New Version&quot;.
             </div>
           )}
           {(selectedVersionDetails || isEditing) && (

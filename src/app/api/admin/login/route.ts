@@ -13,8 +13,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let passwordPayload;
   try {
-    const { password } = await req.json();
+    passwordPayload = await req.json();
+  } catch (jsonParseError) {
+    console.error("Admin login: Invalid JSON in request body", jsonParseError);
+    return NextResponse.json(
+      { success: false, error: "Invalid request format. Expected JSON." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const { password } = passwordPayload;
+    if (typeof password !== "string") {
+      return NextResponse.json(
+        { success: false, error: "Password must be a string." },
+        { status: 400 }
+      );
+    }
+
     if (password === adminPassword) {
       // In a real app, set a secure, httpOnly cookie or session token here.
       // For MVP, we'll rely on the client to store a success flag.
@@ -25,10 +43,22 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
-  } catch (error) {
+  } catch (processingError) {
+    console.error(
+      "Admin login: Unexpected error processing login request",
+      processingError
+    );
+    let errorMessage = "An unexpected error occurred during login.";
+    if (
+      processingError instanceof Error &&
+      process.env.NODE_ENV === "development"
+    ) {
+      // Provide more details in development, but not in production for security.
+      errorMessage = processingError.message;
+    }
     return NextResponse.json(
-      { success: false, error: "Invalid request body" },
-      { status: 400 }
+      { success: false, error: errorMessage },
+      { status: 500 }
     );
   }
 }

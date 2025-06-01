@@ -3,6 +3,7 @@ import { addPromptVersion } from "@/lib/admin-prompt-utils";
 import { PromptType } from "@/types/admin-prompts";
 
 // Basic Admin Auth Check (Replace with more robust auth in production)
+/* // Commenting out unused placeholder function
 async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
   // For MVP, this is a placeholder. In a real app, you'd check a session/token.
   // This demo version doesn't implement full auth for this specific route yet,
@@ -10,22 +11,19 @@ async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
   // A simple check could be added here (e.g., a secret header) if needed for basic protection.
   const adminPassword = process.env.ADMIN_PASSWORD;
   const providedPassword = req.headers.get("X-Admin-Password"); // Example: client sends password in header
-
-  if (
-    !adminPassword ||
-    !providedPassword ||
-    providedPassword !== adminPassword
-  ) {
+  
+  if (!adminPassword || !providedPassword || providedPassword !== adminPassword) {
     // To make it somewhat secure for now, let's check against ADMIN_PASSWORD via a header
     // This is NOT secure for production but better than nothing for an internal tool MVP.
     // The client would need to be updated to send this header after login.
     // For now, let's assume if the call is made, it implies some prior auth on client.
     // To enable actual check: uncomment the error below and ensure client sends header.
     // console.warn("Admin action attempt without valid X-Admin-Password header or mismatch.");
-    // return false;
+    // return false; 
   }
   return true; // Placeholder - assumes client has handled login.
 }
+*/
 
 export async function POST(req: NextRequest) {
   // Basic Auth - replace with proper session/token validation in a real app

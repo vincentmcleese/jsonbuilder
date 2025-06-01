@@ -70,7 +70,9 @@ describe("/api/generate-guide API endpoint", () => {
       ...validGuideRequestBody,
       n8nWorkflowJson: undefined,
     };
-    const response = await POST(mockRequest(invalidBody as any));
+    const response = await POST(
+      mockRequest(invalidBody as unknown as GenerateGuideRequest)
+    );
     expect(response.status).toBe(400);
     expect(await response.json()).toHaveProperty(
       "error",

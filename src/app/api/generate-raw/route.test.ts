@@ -134,7 +134,9 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
       ...validSprint4RequestBody,
       selectedTriggerTool: undefined,
     };
-    const response = await POST(mockRequest(invalidBody as any));
+    const response = await POST(
+      mockRequest(invalidBody as unknown as GenerateRawRequest)
+    );
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error).toContain("Invalid request body for raw generation.");

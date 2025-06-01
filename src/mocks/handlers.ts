@@ -31,6 +31,7 @@ export const handlers = [
   // }),
 
   // Handler for /api/validate-prompt
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   http.post("/api/validate-prompt", async ({ request: _request }) => {
     // This default handler doesn't inspect the request body, just returns success.
     // Tests needing specific request body checks will override this.
@@ -38,6 +39,7 @@ export const handlers = [
   }),
 
   // Handler for /api/generate-raw
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   http.post("/api/generate-raw", async ({ request: _request }) => {
     // This default handler also doesn't inspect the body deeply for default success.
     // It uses the first LLM model if not overridden.

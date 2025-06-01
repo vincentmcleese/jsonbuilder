@@ -3,15 +3,25 @@ import {
   PromptType,
   promptTypeToFilename,
   promptVariables,
+  PromptVersion,
 } from "@/types/admin-prompts";
 import { readPromptSet } from "@/lib/admin-prompt-utils";
 
 // For MVP, no server-side session check. Relies on client already being authenticated.
 // In a real app, this route would also be protected.
 
-export async function GET(req: NextRequest) {
+interface AdminPromptResponseEntry {
+  displayName: string;
+  type: PromptType;
+  filename: string;
+  versions: PromptVersion[];
+  availableVariables: string[];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_req: NextRequest) {
   try {
-    const responseData: Record<string, any> = {};
+    const responseData: Record<string, AdminPromptResponseEntry> = {};
 
     for (const type of Object.values(PromptType)) {
       const typedPromptType = type as PromptType;
