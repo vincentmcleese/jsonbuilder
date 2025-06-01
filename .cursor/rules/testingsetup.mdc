@@ -3,204 +3,180 @@ description:
 globs: 
 alwaysApply: false
 ---
+Understood. I will update the `testingsetup` rule with the key proposals for a cleaner, more robust, and developer-friendly testing strategy. This will serve as a better guide for future projects.
 
-Okay, I've reviewed the `testingsetup` rule against our final working configuration. I'll provide an updated version that incorporates the key refinements and learnings.
-
-Here is the updated `testingsetup` rule content:
+Here is the proposed updated content for your `testingsetup.mdc` rule:
 
 ---
 
 **Rule Name: testingsetup**
 **Description:**
 
-Summary of key configurations and learnings for setting up a stable Jest testing environment for Next.js 14 (App Router) projects using TypeScript, with MSW (Mock Service Worker) for API mocking in both API route tests (Node.js environment) and frontend component tests (JSDOM environment).
+Comprehensive guide for establishing a stable and developer-friendly Jest testing environment for Next.js 14 (App Router) projects using TypeScript. This setup includes Mock Service Worker (MSW) for API mocking across API route tests (Node.js environment) and frontend component tests (JSDOM environment), emphasizing robustness and maintainability.
 
-**Core Goal:** Achieve stable Jest testing for a Next.js 14 (App Router) project using TypeScript, with MSW for mocking API calls in both API route tests (Node.js environment) and frontend component tests (JSDOM environment).
+**Core Goal:** Achieve stable, clean, and reliable Jest testing that aids development by providing fast feedback and clear behavior documentation.
 
-**Key Configuration Files & Setup Steps:**
+**I. Foundational Setup (Core Dependencies & Configuration):**
 
 1.  **`package.json` Dependencies:**
-    *   **Jest & Related:** `jest@^29.x.x` (e.g., `^29.7.0`), `@types/jest`, `ts-jest`, `jest-environment-jsdom@^29.x.x` (ensure version aligns with Jest, e.g., `^29.7.0`), `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`.
+    *   **Jest & Core Testing:** `jest@^29.x.x` (e.g., `^29.7.0`), `@types/jest`, `ts-jest`.
+    *   **React/DOM Testing:** `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event` (for realistic user interactions).
+    *   **JSDOM Environment:** `jest-environment-jsdom@^29.x.x` (aligned with Jest version), `jest-fixed-jsdom` (crucial for a more stable JSDOM providing necessary globals like `TextEncoder`).
     *   **MSW:** `msw` (e.g., `^2.x.x`).
-    *   **Polyfills/Fixes:**
-        *   `cross-fetch`: For a robust Fetch API polyfill in the JSDOM test environment.
-        *   `jest-fixed-jsdom`: A custom Jest environment for a more stable JSDOM, crucial for resolving issues with globals like `TextEncoder`.
+    *   **Polyfills:** `cross-fetch` (for a reliable Fetch API polyfill in JSDOM).
 
-2.  **`jest.config.js`:**
-    *   **Base Setup (using `next/jest`):**
-        ```javascript
-        const nextJest = require('next/jest');
-        const createJestConfig = nextJest({ dir: './' });
-        
-        const customJestConfig = {
-          // ... see details below ...
-        };
-        
-        module.exports = createJestConfig(customJestConfig);
-        ```
-    *   **`customJestConfig` Details:**
-        ```javascript
-        const customJestConfig = {
-          setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-          testEnvironment: 'jest-fixed-jsdom', // Use jest-fixed-jsdom for component tests
-          resolver: './jest.resolver.js',      // Custom resolver for MSW
-          moduleNameMapper: {
-            '^@/(.*)$': '<rootDir>/src/$1', // Standard alias for src directory
-
-            // Explicit mappings for MSW internals. These were found necessary
-            // by inspecting msw's package.json "exports" map.
-            // While the custom resolver helps, these ensure direct pathing.
+2.  **`jest.config.js` (Primary Jest Configuration):**
+    *   Utilize `next/jest` for base Next.js compatibility.
+    *   **`customJestConfig` Highlights:**
+        *   `setupFilesAfterEnv: ['<rootDir>/jest.setup.js']`: Points to the global test setup file.
+        *   `testEnvironment: 'jest-fixed-jsdom'`: Default environment for component tests, providing a more stable JSDOM.
+        *   `resolver: './jest.resolver.js'`: Custom resolver to ensure MSW and its dependencies use Node.js-compatible builds in JSDOM.
+        *   `moduleNameMapper`:
+            *   `'^@/(.*)$': '<rootDir>/src/$1'` (for `@/` src alias).
+            *   Include explicit mappings for MSW internals (`msw/node`, `msw`, `@mswjs/interceptors/*`) derived from their `package.json` "exports" if the custom resolver alone is insufficient. This acts as a robust fallback.
+            ```javascript
+            // Example msw internal mappings:
             '^msw/node$': '<rootDir>/node_modules/msw/lib/node/index.js',
-            '^msw$': '<rootDir>/node_modules/msw/lib/core/index.js',
             '^@mswjs/interceptors/ClientRequest$': '<rootDir>/node_modules/@mswjs/interceptors/lib/node/interceptors/ClientRequest/index.js',
-            '^@mswjs/interceptors$': '<rootDir>/node_modules/@mswjs/interceptors/lib/node/index.js'
-          },
-          preset: 'ts-jest',
-        };
-        ```
+            // etc.
+            ```
+        *   `preset: 'ts-jest'`: For TypeScript support.
 
-3.  **`jest.resolver.js` (Custom Resolver for MSW in JSDOM):**
-    *   Create this file at the project root.
-    *   Purpose: To guide Jest's module resolution for `msw` and `@mswjs/interceptors` packages. It adjusts the export conditions to prefer Node.js-compatible builds even within the JSDOM environment, which MSW's `setupServer` expects. This helps avoid issues where browser-specific builds (lacking Node.js globals like `TextEncoder`) might be incorrectly chosen.
+3.  **`jest.resolver.js` (Custom MSW Resolver):**
+    *   Located at the project root.
+    *   **Purpose:** Intercepts Jest's module resolution for `msw` and `@mswjs/interceptors`. It modifies the "export conditions" to strip "browser" and prefer "node", ensuring MSW's `setupServer` (Node.js build) is used correctly even in the JSDOM environment, preventing issues with missing Node globals in browser-specific builds.
     ```javascript
     // jest.resolver.js
     module.exports = (path, options) => {
-      // Regex to identify msw and @mswjs/interceptors paths
       const mswRelatedPattern = new RegExp("^(msw|@mswjs\\\\/interceptors)(\\\\/|$)");
-
       if (mswRelatedPattern.test(path)) {
-        // Filter out the "browser" condition and ensure "node" is present
         let newConditions = options.conditions.filter(c => c !== 'browser');
         if (!newConditions.includes('node')) {
           newConditions.push('node');
         }
-        return options.defaultResolver(path, {
-          ...options,
-          conditions: newConditions,
-        });
+        return options.defaultResolver(path, { ...options, conditions: newConditions });
       }
-
-      // For all other modules, use the default resolver
       return options.defaultResolver(path, options);
     };
     ```
 
-4.  **`jest.setup.js` (Global Test Setup):**
-    *   **Order of imports and polyfills is CRITICAL.** Globals must be set up before MSW is initialized.
+4.  **`jest.setup.js` (Global Test Environment Augmentation):**
+    *   **CRITICAL ORDERING:** Polyfills must be applied *before* MSW server initialization.
     ```javascript
     // jest.setup.js
 
-    // 1. Polyfill TextEncoder and TextDecoder (from Node's 'util')
-    // This needs to be available very early for MSW's internals.
+    // 1. Essential JSDOM Globals (very early)
+    // For libraries like Radix UI (used by shadcn/ui) and MSW internals.
     import { TextEncoder, TextDecoder } from 'util';
+    if (typeof global.TextEncoder === 'undefined') global.TextEncoder = TextEncoder;
+    if (typeof global.TextDecoder === 'undefined') global.TextDecoder = TextDecoder;
 
-    if (typeof global.TextEncoder === 'undefined') {
-      global.TextEncoder = TextEncoder;
-    }
-    if (typeof global.TextDecoder === 'undefined') {
-      global.TextDecoder = TextDecoder;
-    }
-
-    // 2. Robustly set up window.location for JSDOM (if not already properly set by jest-fixed-jsdom)
-    // and ensure TextEncoder/Decoder are also on the window object for maximum compatibility.
     if (typeof window !== 'undefined') {
-      if (!window.location) { // Create a basic location object if none exists
-        Object.defineProperty(window, 'location', {
-          value: {
-            href: 'http://localhost/', // Base URL for resolving relative paths
-            origin: 'http://localhost',
-            protocol: 'http:',
-            host: 'localhost',
-            hostname: 'localhost',
-            pathname: '/',
-            search: '',
-            hash: '',
-          },
-          writable: true,
-          configurable: true,
-        });
-      } else { // If location exists, ensure key properties are there
-        if (!window.location.origin) {
-          window.location.origin = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}`;
-        }
-        if (!window.location.pathname) {
-          window.location.pathname = '/';
-        }
-        if (!window.location.href) {
-          window.location.href = window.location.origin + window.location.pathname + window.location.search + window.location.hash;
-        }
-      }
+      if (!window.location) { /* ... robust window.location polyfill ... */ }
+      else { /* ... ensure window.location.origin/pathname/href are set ... */ }
 
-      if (typeof window.TextEncoder === 'undefined') {
-        Object.defineProperty(window, 'TextEncoder', { value: TextEncoder });
+      if (typeof window.TextEncoder === 'undefined') Object.defineProperty(window, 'TextEncoder', { value: TextEncoder });
+      if (typeof window.TextDecoder === 'undefined') Object.defineProperty(window, 'TextDecoder', { value: TextDecoder });
+      
+      // Polyfills for missing Element.prototype functions in JSDOM affecting user-event
+      if (typeof Element.prototype.hasPointerCapture === 'undefined') {
+        Element.prototype.hasPointerCapture = function() { return false; };
+        Element.prototype.setPointerCapture = function() { /* no-op */ };
+        Element.prototype.releasePointerCapture = function() { /* no-op */ };
       }
-      if (typeof window.TextDecoder === 'undefined') {
-        Object.defineProperty(window, 'TextDecoder', { value: TextDecoder });
+      if (typeof Element.prototype.scrollIntoView === 'undefined') {
+        Element.prototype.scrollIntoView = function() { /* no-op */ };
       }
     }
 
-    // 3. Polyfill Fetch API (fetch, Request, Response, Headers) using cross-fetch
-    // This often works more reliably with MSW in JSDOM than JSDOM's built-in fetch alone.
-    import 'cross-fetch/polyfill';
+    // 2. Fetch API Polyfill
+    import 'cross-fetch/polyfill'; // Provides reliable fetch, Request, Response, Headers
 
-    // 4. Import Testing Library's Jest DOM extensions
+    // 3. Testing Library DOM extensions
     import '@testing-library/jest-dom';
 
-    // 5. Import your MSW server setup
-    import { server } from '@/mocks/server'; // Adjust path if necessary
+    // 4. MSW Server Setup
+    import { server } from '@/mocks/server'; // Assumes default handlers are in src/mocks/server.ts
 
-    // 6. MSW lifecycle hooks
-    beforeAll(() => server.listen({ onUnhandledRequest: 'error' })); // Error on unhandled requests
-    afterEach(() => server.resetHandlers()); // Reset handlers after each test
-    afterAll(() => server.close());          // Clean up after all tests
+    beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+    afterEach(() => server.resetHandlers()); // Crucial for test isolation
+    afterAll(() => server.close());
     ```
+    *(Note: The `window.location` polyfill should ensure `href`, `origin`, `pathname`, etc. are set for base URL resolution by `fetch`.)*
 
-5.  **API Route Specific Tests (e.g., `src/app/api/**/*.test.ts`):**
-    *   Use the Jest docblock at the top of the file to switch the test environment to Node.js:
+5.  **`tsconfig.json`:**
+    *   `compilerOptions.types`: Include `"jest"` and `"node"`.
+    *   `include`: Ensure test setup files (`jest.config.js`, `jest.setup.js`, `jest.resolver.js`) are included if they are TypeScript files or if needed for editor IntelliSense.
+
+**II. Test Implementation Strategies for Cleanliness & Reliability:**
+
+1.  **Environment-Specific Testing:**
+    *   **API Route Tests (`src/app/api/**/*.test.ts`):**
+        *   Mandate `/** @jest-environment node */` at the top of these files.
+        *   These tests should focus on request/response validation, business logic, and direct interactions with (mocked) services like databases or external APIs (e.g., OpenRouter via `fetch` spy).
+    *   **Frontend Component Tests (`*.test.tsx`):**
+        *   Will use the default `jest-fixed-jsdom` environment.
+        *   Focus on user interactions, component rendering, state changes, and correct data display based on mocked API responses (via MSW).
+
+2.  **MSW Handler Management:**
+    *   **Centralized Default Handlers (`src/mocks/handlers.ts`):**
+        *   Define common, successful (200 OK) MSW handlers for your API endpoints here.
+        *   `src/mocks/server.ts` should use these: `export const server = setupServer(...handlers);`.
+    *   **Test-Specific Overrides:** In individual test files or `describe` blocks, use `server.use(...)` to add or override handlers for specific scenarios (e.g., error responses, unique payloads). This keeps tests focused and reduces boilerplate.
         ```typescript
-        /** @jest-environment node */
-
-        // ... your API test code ...
+        // Example in a test:
+        server.use(
+          http.post('/api/my-endpoint', () => {
+            return HttpResponse.json({ error: 'Specific error for this test' }, { status: 500 });
+          })
+        );
         ```
-    *   This ensures API tests run in a native Node.js environment, avoiding JSDOM-related issues for server-side code and allowing `msw/node` to function as intended with native Node.js globals.
 
-6.  **MSW Setup (`src/mocks/` directory):**
-    *   `src/mocks/handlers.ts`: Define your shared MSW request handlers.
+3.  **Interacting with Complex UI Components (e.g., shadcn/ui):**
+    *   **Use `@testing-library/user-event`:** Prefer `userEvent` over `fireEvent` for more realistic simulation of user interactions.
+    *   **Helper Functions:** Create reusable helper functions for common complex interactions (e.g., selecting an option in a shadcn/ui `Select`).
         ```typescript
-        import { http, HttpResponse } from 'msw';
-        
-        export const handlers = [
-          // Example: http.get('/api/user', () => HttpResponse.json({ id: '123' })),
-        ];
+        // src/test-utils/interactionHelpers.ts (example)
+        import { screen } from '@testing-library/react';
+        import userEvent from '@testing-library/user-event';
+
+        export async function selectShadcnOption(selectLabel: RegExp | string, optionText: RegExp | string) {
+          const selectTrigger = screen.getByRole('combobox', { name: selectLabel });
+          await userEvent.click(selectTrigger);
+          const option = await screen.findByRole('option', { name: optionText }); // Waits for option
+          await userEvent.click(option);
+          // Optional: await waitFor(() => expect(selectTrigger).toHaveTextContent(optionText));
+        }
         ```
-    *   `src/mocks/server.ts`: Set up the MSW server using `setupServer` from `msw/node`.
+    *   This abstracts away the multi-step interaction and makes tests more readable.
+
+4.  **Handling Asynchronous Operations and UI Updates:**
+    *   **`findBy*` Queries:** Use `await screen.findBy...` queries, which automatically use `waitFor` for elements that appear asynchronously.
+    *   **`waitFor` Utility:** For more complex scenarios or multiple assertions that depend on async updates, use `await waitFor(() => { /* assertions */ });`.
+    *   **Loading States:**
+        *   If loading states are very brief due to fast-resolving mocks, testing them can be tricky.
+        *   Current solution: Re-querying the element by its expected loading state text/name *within* a `waitFor` block (`await waitFor(() => { screen.getByRole('button', {name: /Loading.../i}); })`).
+        *   If absolutely necessary and pragmatic, a *small, controlled* artificial delay in an MSW handler for a *specific test case* can stabilize loading state assertions, but use sparingly.
         ```typescript
-        import { setupServer } from 'msw/node';
-        import { handlers } from './handlers';
-        
-        export const server = setupServer(...handlers);
+        // Example of testing a brief loading state after a click:
+        // const button = screen.getByRole('button', { name: 'Submit' });
+        // await userEvent.click(button);
+        // await waitFor(() => expect(button).toHaveTextContent(/Submitting.../i));
+        // await waitFor(() => expect(button).toHaveTextContent('Submit')); // Back to original
         ```
 
-7.  **Frontend Component Tests (`*.test.tsx`):**
-    *   MSW handlers defined within these tests (using `server.use(...)`) should use **relative paths** (e.g., `http.post('/api/some-endpoint', ...)`) to match the `fetch` calls made by the components, assuming the `window.location` polyfill in `jest.setup.js` provides a consistent base URL (`http://localhost`).
+5.  **Test Organization:**
+    *   Use nested `describe` blocks to group related tests (e.g., by feature, by sprint).
+    *   Use clear, descriptive test names (`it('should...')`).
 
-8.  **`tsconfig.json`:**
-    *   In `compilerOptions`, ensure `"types": ["jest", "node"]` is present.
-    *   The `include` array should cover your test files and setup files (e.g., `jest.setup.js`, `jest.resolver.js` if they were TypeScript, or just generally for project awareness).
+**Key Learnings & Troubleshooting Insights Incorporated:**
 
-**Key Learnings & Troubleshooting Insights:**
-
-*   **Environment Mismatch is Common:** `msw/node` (`setupServer`) is for Node.js environments. JSDOM, while simulating a browser, runs in Node.js. This can lead to conflicts if MSW tries to use browser-specific builds that lack Node globals or if JSDOM doesn't provide perfect Fetch API/Encoding API globals.
-*   **`jest-fixed-jsdom`:** This custom environment was crucial for providing stable `TextEncoder`/`TextDecoder` globals that MSW's internals depend on, which the standard `jest-environment-jsdom` struggled with in this setup.
-*   **Custom Resolver (`jest.resolver.js`):** Essential for forcing MSW and its dependencies (`@mswjs/interceptors`) to use their Node.js-compatible exports when being resolved in the JSDOM test environment. This prevents errors like "Cannot find module 'msw/node'" or issues stemming from browser-specific builds.
-*   **Polyfill Order & Robustness (`jest.setup.js`):**
-    *   `TextEncoder`/`TextDecoder` from `util` must be polyfilled very early, for both `global` and `window`.
-    *   A robust `window.location` object needs to be available for relative URL resolution by `fetch`.
-    *   `cross-fetch/polyfill` provides a reliable `fetch` implementation that MSW integrates well with in JSDOM.
-*   **API Test Environment:** Always use `/** @jest-environment node */` for Next.js API route tests to ensure they run in a true Node.js context.
-*   **Dependency Versioning:** Pay attention to peer dependency conflicts. Using aligned versions of Jest and its related packages (like `jest-environment-jsdom`) is important for stability and compatibility with tools like `jest-fixed-jsdom`.
-*   **MSW `onUnhandledRequest: 'error'`:** This is very helpful in `server.listen()` to catch requests not being mocked as expected.
+*   **`jest-fixed-jsdom` + Specific Polyfills:** This combination is crucial for a stable JSDOM that works with modern component libraries and MSW.
+*   **Custom Resolver for MSW:** Addresses fundamental module resolution issues for MSW v2+ in Jest/JSDOM.
+*   **Order in `jest.setup.js`:** Polyfills *before* MSW initialization.
+*   **`PointerEvents` & `scrollIntoView` Mocks:** Necessary for testing UI components that use these browser APIs not fully implemented in JSDOM.
+*   **Asynchronous Nature of Tests:** Rigorous use of `async/await`, `findBy*`, and `waitFor` is essential.
 
 ---
 
-This updated rule should serve as a comprehensive guide to achieving a resilient Jest + MSW testing setup for future Next.js 14 projects.
+This updated rule is more prescriptive based on our journey and aims to prevent many of the "test-driven development loops" by establishing a more robust and understandable baseline configuration from the start. It also emphasizes strategies for cleaner test code.

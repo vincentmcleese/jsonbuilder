@@ -25,7 +25,7 @@ export type PromptValidationResponse = z.infer<
   typeof PromptValidationResponseSchema
 >;
 
-// Schema for /api/generate-raw request body (Sprint 3)
+// Schema for /api/generate-raw request body (Sprint 3 & 4 enhanced)
 export const GenerateRawRequestSchema = z.object({
   userNaturalLanguagePrompt: z
     .string()
@@ -33,10 +33,22 @@ export const GenerateRawRequestSchema = z.object({
   selectedTriggerTool: z.string().min(1, "Trigger tool selection is required."),
   selectedProcessLogicTool: z
     .string()
-    .min(1, "Process logic tool selection is required."), // Single selection for MVP
-  selectedActionTool: z.string().min(1, "Action tool selection is required."), // Single selection for MVP
+    .min(1, "Process logic tool selection is required."),
+  selectedActionTool: z.string().min(1, "Action tool selection is required."),
   selectedLlmModel: z.string().min(1, "LLM model selection is required."),
-  // No separate version, as it's part of the model ID
+  // New fields for Sprint 4 to pass AI extracted texts
+  aiExtractedTrigger: z
+    .string()
+    .nullable()
+    .describe("AI extracted trigger text from validation step"),
+  aiExtractedProcess: z
+    .string()
+    .nullable()
+    .describe("AI extracted process text from validation step"),
+  aiExtractedAction: z
+    .string()
+    .nullable()
+    .describe("AI extracted action text from validation step"),
 });
 
 export type GenerateRawRequest = z.infer<typeof GenerateRawRequestSchema>;

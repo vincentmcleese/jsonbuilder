@@ -216,7 +216,7 @@
       - Support for multiple prompt types: validation prompt, generation prompt template (`INSTRUCTIONS.md`), etc.
   2.  **Admin Route & Authentication (Backend/Frontend):**
       - Create protected `/admin` route (basic auth or environment-based access for MVP).
-      - Implement simple authentication check (e.g., admin password from environment variable).
+      - Implement simple authentication check (e.g., admin password (ADMIN_PASSWORD) from environment variable).
   3.  **Admin UI (Frontend):**
       - List all prompt versions with their metadata.
       - View/edit prompt content in a code editor component (e.g., Monaco editor or simple textarea with syntax highlighting).

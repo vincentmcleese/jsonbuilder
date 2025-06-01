@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
       selectedProcessLogicTool,
       selectedActionTool,
       selectedLlmModel,
+      aiExtractedTrigger,
+      aiExtractedProcess,
+      aiExtractedAction,
     } = validatedRequest.data;
 
     const promptFilePath = path.join(
@@ -48,18 +51,46 @@ export async function POST(req: NextRequest) {
       "generation",
       "INSTRUCTIONS.md"
     );
-    let promptContent;
+    let promptTemplate;
     try {
-      promptContent = fs.readFileSync(promptFilePath, "utf-8");
+      promptTemplate = fs.readFileSync(promptFilePath, "utf-8");
     } catch (fileError) {
-      console.error("Error reading prompt file:", fileError);
+      console.error("Error reading INSTRUCTIONS.md:", fileError);
       return NextResponse.json(
-        {
-          error: "Could not load prompt instructions. Please contact support.",
-        },
+        { error: "Could not load base prompt instructions." },
         { status: 500 }
       );
     }
+
+    let finalPrompt = promptTemplate;
+    finalPrompt = finalPrompt.replace(
+      "{{USER_NATURAL_LANGUAGE_PROMPT}}",
+      userNaturalLanguagePrompt || ""
+    );
+    finalPrompt = finalPrompt.replace(
+      "{{AI_EXTRACTED_TRIGGER_TEXT}}",
+      aiExtractedTrigger || "N/A"
+    );
+    finalPrompt = finalPrompt.replace(
+      "{{AI_EXTRACTED_PROCESS_TEXT}}",
+      aiExtractedProcess || "N/A"
+    );
+    finalPrompt = finalPrompt.replace(
+      "{{AI_EXTRACTED_ACTION_TEXT}}",
+      aiExtractedAction || "N/A"
+    );
+    finalPrompt = finalPrompt.replace(
+      "{{SELECTED_TRIGGER_TOOL}}",
+      selectedTriggerTool || "N/A"
+    );
+    finalPrompt = finalPrompt.replace(
+      "{{SELECTED_PROCESS_LOGIC_TOOL}}",
+      selectedProcessLogicTool || "N/A"
+    );
+    finalPrompt = finalPrompt.replace(
+      "{{SELECTED_ACTION_TOOL}}",
+      selectedActionTool || "N/A"
+    );
 
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
@@ -73,7 +104,7 @@ export async function POST(req: NextRequest) {
           model: selectedLlmModel,
           messages: [
             { role: "system", content: "You are a helpful assistant." },
-            { role: "user", content: promptContent },
+            { role: "user", content: finalPrompt },
           ],
         }),
       }

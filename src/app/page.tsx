@@ -55,6 +55,8 @@ export default function HomePage() {
     null
   );
   const [llmOutput, setLlmOutput] = useState<string | null>(null);
+  const [generatedJson, setGeneratedJson] = useState<string | null>(null);
+  const [generatedGuide, setGeneratedGuide] = useState<string | null>(null);
 
   // Effect to pre-populate selections when validationData is successful
   useEffect(() => {
@@ -74,6 +76,27 @@ export default function HomePage() {
       setShowSelections(false);
     }
   }, [validationData]);
+
+  // New useEffect to split llmOutput into JSON and Guide
+  useEffect(() => {
+    if (llmOutput) {
+      const separator = "---JSON-GUIDE-SEPARATOR---";
+      const parts = llmOutput.split(separator);
+      if (parts.length === 2) {
+        setGeneratedJson(parts[0].trim());
+        setGeneratedGuide(parts[1].trim());
+      } else {
+        // Fallback if separator is not found or structure is unexpected
+        setGeneratedJson(llmOutput); // Put everything in JSON as a fallback
+        setGeneratedGuide(
+          "Could not automatically separate JSON and Guide. The full output is shown in the JSON section."
+        );
+      }
+    } else {
+      setGeneratedJson(null);
+      setGeneratedGuide(null);
+    }
+  }, [llmOutput]);
 
   async function handleValidatePrompt() {
     setValidationApiLoading(true);
@@ -112,6 +135,8 @@ export default function HomePage() {
     setRawGenerationLoading(true);
     setRawGenerationError(null);
     setLlmOutput(null);
+    setGeneratedJson(null);
+    setGeneratedGuide(null);
 
     const payload: GenerateRawRequest = {
       userNaturalLanguagePrompt: userPromptInput,
@@ -119,6 +144,9 @@ export default function HomePage() {
       selectedProcessLogicTool: selectedProcess,
       selectedActionTool: selectedAction,
       selectedLlmModel: selectedModel,
+      aiExtractedTrigger: validationData.extractedTriggerText,
+      aiExtractedProcess: validationData.extractedProcessText,
+      aiExtractedAction: validationData.extractedActionText,
     };
 
     try {
@@ -313,7 +341,9 @@ export default function HomePage() {
         </div>
       )}
 
-      {rawGenerationLoading && !llmOutput && <p>Generating workflow...</p>}
+      {rawGenerationLoading && !llmOutput && (
+        <p className="mt-4">Generating workflow with selected tools...</p>
+      )}
       {rawGenerationError && (
         <Alert variant="destructive" className="w-full max-w-2xl mt-4">
           <Terminal className="h-4 w-4" />
@@ -321,14 +351,37 @@ export default function HomePage() {
           <AlertDescription>{rawGenerationError}</AlertDescription>
         </Alert>
       )}
-      {llmOutput && (
-        <div className="w-full max-w-4xl p-4 mt-6 border rounded-md bg-gray-50 dark:bg-gray-800">
-          <h2 className="text-xl font-semibold mb-2">
-            Generated Workflow Output:
-          </h2>
-          <pre className="whitespace-pre-wrap text-sm">{llmOutput}</pre>
+
+      {/* Separated JSON and Guide Display */}
+      {generatedJson && (
+        <div className="w-full max-w-4xl p-4 mt-6 border rounded-md bg-gray-900 text-gray-100 dark:bg-gray-800">
+          <h3 className="text-lg font-semibold mb-2 text-gray-50">
+            Generated n8n Workflow JSON:
+          </h3>
+          <pre className="whitespace-pre-wrap text-sm overflow-x-auto">
+            {generatedJson}
+          </pre>
         </div>
       )}
+      {generatedGuide && (
+        <div className="w-full max-w-4xl p-4 mt-4 border rounded-md bg-gray-100 dark:bg-gray-700">
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
+            Instructional Guide:
+          </h3>
+          {/* For S4, simple text display. Markdown rendering can be S6. */}
+          <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">
+            {generatedGuide}
+          </pre>
+        </div>
+      )}
+
+      {/* Fallback for llmOutput if not separated (can be removed if confident in separation) */}
+      {/* {!generatedJson && !generatedGuide && llmOutput && (
+        <div className="w-full max-w-4xl p-4 mt-6 border rounded-md bg-gray-50 dark:bg-gray-800">
+          <h2 className="text-xl font-semibold mb-2">Raw LLM Output (could not separate):</h2>
+          <pre className="whitespace-pre-wrap text-sm">{llmOutput}</pre>
+        </div>
+      )} */}
     </main>
   );
 }
