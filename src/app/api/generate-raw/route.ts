@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { GenerateRawRequestSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    const hardcodedModel = "openai/gpt-3.5-turbo";
 
     if (!openRouterApiKey) {
       console.error("OPENROUTER_API_KEY is not set.");
@@ -15,7 +15,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Construct the path to the prompt file
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (e) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const validatedRequest = GenerateRawRequestSchema.safeParse(requestBody);
+
+    if (!validatedRequest.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid request body for raw generation.",
+          details: validatedRequest.error.issues,
+        },
+        { status: 400 }
+      );
+    }
+
+    const {
+      userNaturalLanguagePrompt,
+      selectedTriggerTool,
+      selectedProcessLogicTool,
+      selectedActionTool,
+      selectedLlmModel,
+    } = validatedRequest.data;
+
     const promptFilePath = path.join(
       process.cwd(),
       "prompts",
@@ -35,9 +61,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // For Sprint 1, user_input is part of the INSTRUCTIONS.md or not used directly
-    // const { userInput } = await req.json(); // Will be used in later sprints
-
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
@@ -47,9 +70,9 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: hardcodedModel,
+          model: selectedLlmModel,
           messages: [
-            { role: "system", content: "You are a helpful assistant." }, // System prompt can be refined
+            { role: "system", content: "You are a helpful assistant." },
             { role: "user", content: promptContent },
           ],
         }),
@@ -72,7 +95,6 @@ export async function POST(req: NextRequest) {
 
     const data = await response.json();
 
-    // Assuming the response structure from OpenRouter has choices[0].message.content
     const llmOutput =
       data.choices &&
       data.choices[0] &&

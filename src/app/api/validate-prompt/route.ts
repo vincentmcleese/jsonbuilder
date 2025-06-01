@@ -2,7 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
-import { PromptValidationResponseSchema } from "@/lib/validations";
+import {
+  PromptValidationResponseSchema,
+  ClientFacingValidationResponseSchema,
+  type ClientFacingValidationResponse,
+} from "@/lib/validations";
+import {
+  triggerTools,
+  processLogicTools,
+  actionTools,
+  getPreselectedTool,
+  triggerToolKeywords,
+  processLogicToolKeywords,
+  actionToolKeywords,
+} from "@/lib/toolOptions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,9 +30,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let body;
+    let requestBody;
     try {
-      body = await req.json();
+      requestBody = await req.json();
     } catch (parseError) {
       console.error("Error parsing request body:", parseError);
       return NextResponse.json(
@@ -28,10 +41,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { userPrompt } = body || {}; // Ensure body is not null before destructuring
-
-    // Use a separate variable for the value after checking its existence and type
-    const userPromptValue = body?.userPrompt;
+    const { userPrompt } = requestBody || {};
+    const userPromptValue = requestBody?.userPrompt;
 
     if (typeof userPromptValue !== "string" || userPromptValue.trim() === "") {
       return NextResponse.json(
@@ -120,28 +131,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let parsedLlmJson;
     try {
-      const parsedJson = JSON.parse(llmJsonOutput);
-      const validationResult =
-        PromptValidationResponseSchema.safeParse(parsedJson);
-
-      if (!validationResult.success) {
-        console.error(
-          "LLM validation response failed Zod parsing:",
-          validationResult.error.issues
-        );
-        // Potentially return the raw LLM JSON if it was close, or a generic error
-        // For now, a generic error to indicate the LLM didn't follow instructions
-        return NextResponse.json(
-          {
-            error:
-              "LLM response for validation was not in the expected format.",
-            details: validationResult.error.issues,
-          },
-          { status: 500 }
-        );
-      }
-      return NextResponse.json(validationResult.data);
+      parsedLlmJson = JSON.parse(llmJsonOutput);
     } catch (jsonParseError) {
       console.error(
         "Error parsing LLM JSON response for validation:",
@@ -157,6 +149,56 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    const llmValidationResult =
+      PromptValidationResponseSchema.safeParse(parsedLlmJson);
+
+    if (!llmValidationResult.success) {
+      console.error(
+        "LLM validation response failed Zod parsing:",
+        llmValidationResult.error.issues,
+        "Parsed LLM JSON:",
+        parsedLlmJson
+      );
+      return NextResponse.json(
+        {
+          error: "LLM response for validation was not in the expected format.",
+          details: llmValidationResult.error.issues,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Now, map extracted text to tools using our backend logic
+    const matchedTriggerTool = getPreselectedTool(
+      triggerTools,
+      triggerToolKeywords,
+      llmValidationResult.data.trigger
+    );
+    const matchedProcessTool = getPreselectedTool(
+      processLogicTools,
+      processLogicToolKeywords,
+      llmValidationResult.data.process
+    );
+    const matchedActionTool = getPreselectedTool(
+      actionTools,
+      actionToolKeywords,
+      llmValidationResult.data.action
+    );
+
+    const clientResponse: ClientFacingValidationResponse = {
+      valid: llmValidationResult.data.valid,
+      extractedTriggerText: llmValidationResult.data.trigger,
+      extractedProcessText: llmValidationResult.data.process,
+      extractedActionText: llmValidationResult.data.action,
+      feedback: llmValidationResult.data.feedback,
+      suggestions: llmValidationResult.data.suggestions,
+      matchedTriggerTool,
+      matchedProcessTool,
+      matchedActionTool,
+    };
+
+    return NextResponse.json(clientResponse);
   } catch (error) {
     console.error("Error in /api/validate-prompt:", error);
     let errorMessage = "An unexpected error occurred during prompt validation.";

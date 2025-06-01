@@ -1,4 +1,4 @@
-// Polyfill TextEncoder and TextDecoder for JSDOM environment if not present on global/window
+// Polyfill TextEncoder and TextDecoder FIRST
 import { TextEncoder, TextDecoder } from "util";
 
 if (typeof global.TextEncoder === "undefined") {
@@ -7,12 +7,14 @@ if (typeof global.TextEncoder === "undefined") {
 if (typeof global.TextDecoder === "undefined") {
   global.TextDecoder = TextDecoder;
 }
-// JSDOM specific: Ensure TextEncoder and TextDecoder are on the window object for MSW.
+
+// JSDOM specific polyfills
 if (typeof window !== "undefined") {
+  // Robust window.location setup
   if (!window.location) {
     Object.defineProperty(window, "location", {
       value: {
-        href: "http://localhost/", // Ensure trailing slash for base path
+        href: "http://localhost/",
         origin: "http://localhost",
         protocol: "http:",
         host: "localhost",
@@ -29,7 +31,7 @@ if (typeof window !== "undefined") {
       window.location.origin = `${window.location.protocol}//${
         window.location.hostname
       }${window.location.port ? ":" + window.location.port : ""}`;
-    if (!window.location.pathname) window.location.pathname = "/"; // Ensure pathname exists
+    if (!window.location.pathname) window.location.pathname = "/";
     if (!window.location.href)
       window.location.href =
         window.location.origin +
@@ -38,15 +40,36 @@ if (typeof window !== "undefined") {
         window.location.hash;
   }
 
+  // TextEncoder/Decoder on window object
   if (typeof window.TextEncoder === "undefined") {
     Object.defineProperty(window, "TextEncoder", { value: TextEncoder });
   }
   if (typeof window.TextDecoder === "undefined") {
     Object.defineProperty(window, "TextDecoder", { value: TextDecoder });
   }
+
+  // PointerEvent polyfills for JSDOM for @testing-library/user-event compatibility with some components
+  if (typeof Element.prototype.hasPointerCapture === "undefined") {
+    Element.prototype.hasPointerCapture = function (pointerId) {
+      return false;
+    }; // Basic mock
+    Element.prototype.setPointerCapture = function (pointerId) {
+      /* no-op */
+    };
+    Element.prototype.releasePointerCapture = function (pointerId) {
+      /* no-op */
+    };
+  }
+
+  // Mock scrollIntoView for JSDOM compatibility with components that use it (e.g., Radix UI Select)
+  if (typeof Element.prototype.scrollIntoView === "undefined") {
+    Element.prototype.scrollIntoView = function () {
+      /* no-op */
+    };
+  }
 }
 
-import "cross-fetch/polyfill"; // Ensure this is active
+import "cross-fetch/polyfill";
 import "@testing-library/jest-dom";
 import { server } from "@/mocks/server";
 
