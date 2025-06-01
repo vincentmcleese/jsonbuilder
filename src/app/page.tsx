@@ -19,6 +19,8 @@ import {
   Zap,
   Cog,
   Bot,
+  Copy,
+  Download,
 } from "lucide-react";
 import type {
   ClientFacingValidationResponse,
@@ -31,6 +33,8 @@ import {
   actionTools,
   llmModels,
 } from "@/lib/toolOptions";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function HomePage() {
   const [userPromptInput, setUserPromptInput] = useState<string>("");
@@ -69,6 +73,8 @@ export default function HomePage() {
     string | null
   >(null);
 
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   // Effect to pre-populate selections when validationData is successful
   useEffect(() => {
     if (validationData && validationData.valid) {
@@ -88,6 +94,49 @@ export default function HomePage() {
       setShowSelections(false);
     }
   }, [validationData]);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const handleCopy = async (textToCopy: string, type: string) => {
+    if (!textToCopy) return;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setToastMessage(`${type} copied to clipboard!`);
+    } catch (err) {
+      console.error(`Failed to copy ${type}:`, err);
+      setToastMessage(`Failed to copy ${type}.`);
+    }
+  };
+
+  const handleDownload = (
+    content: string,
+    filename: string,
+    mimeType: string
+  ) => {
+    if (!content) return;
+    try {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setToastMessage(`${filename} downloaded successfully!`);
+    } catch (err) {
+      console.error(`Failed to download ${filename}:`, err);
+      setToastMessage(`Failed to download ${filename}.`);
+    }
+  };
 
   async function handleValidatePrompt() {
     setValidationApiLoading(true);
@@ -463,9 +512,37 @@ export default function HomePage() {
 
       {generationResult?.generatedJsonString && (
         <div className="w-full max-w-4xl p-4 mt-2 border rounded-md bg-gray-900 text-gray-100 dark:bg-gray-800">
-          <h3 className="text-lg font-semibold mb-2 text-gray-50">
-            Generated n8n Workflow JSON:
-          </h3>
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-lg font-semibold text-gray-50">
+              Generated n8n Workflow JSON:
+            </h3>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  handleCopy(generationResult.generatedJsonString || "", "JSON")
+                }
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-700 hover:text-white dark:hover:text-white"
+              >
+                <Copy className="h-4 w-4 mr-2" /> Copy JSON
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  handleDownload(
+                    generationResult.generatedJsonString || "",
+                    "workflow.json",
+                    "application/json"
+                  )
+                }
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-700 hover:text-white dark:hover:text-white"
+              >
+                <Download className="h-4 w-4 mr-2" /> Download JSON
+              </Button>
+            </div>
+          </div>
           <pre className="whitespace-pre-wrap text-sm overflow-x-auto">
             {generationResult.generatedJsonString}
           </pre>
@@ -482,12 +559,47 @@ export default function HomePage() {
       )}
       {generatedGuideMarkdown && (
         <div className="w-full max-w-4xl p-4 mt-4 border rounded-md bg-gray-100 dark:bg-gray-700">
-          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
-            Instructional Guide:
-          </h3>
-          <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">
-            {generatedGuideMarkdown}
-          </pre>
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Instructional Guide:
+            </h3>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  handleCopy(generatedGuideMarkdown || "", "Guide")
+                }
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                <Copy className="h-4 w-4 mr-2" /> Copy Guide
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  handleDownload(
+                    generatedGuideMarkdown || "",
+                    "guide.md",
+                    "text/markdown"
+                  )
+                }
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                <Download className="h-4 w-4 mr-2" /> Download Guide
+              </Button>
+            </div>
+          </div>
+          <div className="prose dark:prose-invert max-w-none p-2 bg-white dark:bg-gray-800 rounded">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {generatedGuideMarkdown}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 bg-gray-800 text-white p-3 rounded-md shadow-lg z-50">
+          {toastMessage}
         </div>
       )}
     </main>
