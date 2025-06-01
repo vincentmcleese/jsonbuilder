@@ -3,96 +3,141 @@ import HomePage from "./page"; // Adjust path to your HomePage component
 import { server } from "@/mocks/server"; // MSW server
 import { http, HttpResponse } from "msw";
 import "@testing-library/jest-dom";
+import { PromptValidationResponse } from "@/lib/validations";
 
 // Helper function to wrap with client context if needed, not necessary for basic HomePage
 
-describe("HomePage", () => {
-  beforeAll(() => server.listen()); // Enable MSW server before all tests
-  afterEach(() => server.resetHandlers()); // Reset any runtime handlers
-  afterAll(() => server.close()); // Clean up MSW server after all tests
+describe("HomePage - Sprint 2", () => {
+  beforeEach(() => {
+    server.resetHandlers(); // Reset handlers before each test to ensure isolation
+  });
+  // beforeAll, afterAll for server.listen/close are in jest.setup.js
 
-  it("renders the initial page correctly", () => {
+  it("renders initial Sprint 2 UI correctly", () => {
     render(<HomePage />);
     expect(
       screen.getByRole("heading", {
-        name: /n8n Workflow Generator \(MVP - Sprint 1\)/i,
+        name: /n8n Workflow Generator \(Sprint 2\)/i,
       })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Generate Workflow/i })
+      screen.getByRole("textbox", { name: /Enter your automation goal/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Validate & Generate \(S2 Flow\)/i })
     ).toBeInTheDocument();
   });
 
-  it("shows loading state and calls API on generate click, then displays output", async () => {
-    const mockOutput = "Successfully generated LLM output.";
+  it("updates user prompt input as user types", () => {
+    render(<HomePage />);
+    const textarea = screen.getByRole("textbox", {
+      name: /Enter your automation goal/i,
+    });
+    fireEvent.change(textarea, { target: { value: "New user prompt" } });
+    expect(textarea).toHaveValue("New user prompt");
+  });
+
+  it("calls validation API, shows loading, then displays successful validation data", async () => {
+    const mockValidationResponse: PromptValidationResponse = {
+      valid: true,
+      trigger: "Test Trigger",
+      process: "Test Process",
+      action: "Test Action",
+      feedback: null,
+      suggestions: [],
+    };
     server.use(
-      http.post("/api/generate-raw", () => {
-        return HttpResponse.json({ output: mockOutput }, { status: 200 });
+      http.post("/api/validate-prompt", () => {
+        return HttpResponse.json(mockValidationResponse, { status: 200 });
       })
     );
 
     render(<HomePage />);
-    const generateButton = screen.getByRole("button", {
-      name: /Generate Workflow/i,
+    const textarea = screen.getByRole("textbox", {
+      name: /Enter your automation goal/i,
     });
-    fireEvent.click(generateButton);
+    fireEvent.change(textarea, {
+      target: { value: "Valid prompt for testing" },
+    });
 
-    expect(screen.getByText(/Loading.../i)).toBeInTheDocument();
-    expect(generateButton).toBeDisabled();
+    const validateButton = screen.getByRole("button", {
+      name: /Validate & Generate \(S2 Flow\)/i,
+    });
+    fireEvent.click(validateButton);
+
+    expect(
+      screen.getByText(/Validating your prompt... Please wait./i)
+    ).toBeInTheDocument();
+    expect(validateButton).toBeDisabled();
 
     await waitFor(() => {
-      expect(screen.getByText(mockOutput)).toBeInTheDocument();
+      expect(screen.getByText("Prompt Validated!")).toBeInTheDocument();
     });
-    expect(screen.queryByText(/Loading.../i)).not.toBeInTheDocument();
-    expect(generateButton).not.toBeDisabled();
+    expect(screen.getByText(/Trigger: Test Trigger/i)).toBeInTheDocument();
+    expect(screen.getByText(/Process: Test Process/i)).toBeInTheDocument();
+    expect(screen.getByText(/Action: Test Action/i)).toBeInTheDocument();
+    expect(validateButton).not.toBeDisabled();
   });
 
-  it("shows error message if API call fails", async () => {
-    const errorMessage = "Failed to fetch from LLM";
+  it("displays feedback and suggestions when prompt validation is not valid", async () => {
+    const mockInvalidResponse: PromptValidationResponse = {
+      valid: false,
+      trigger: null,
+      process: null,
+      action: null,
+      feedback: "Your prompt is missing an action.",
+      suggestions: [
+        "Try adding what the automation should do.",
+        "e.g., send an email",
+      ],
+    };
     server.use(
-      http.post("/api/generate-raw", () => {
+      http.post("/api/validate-prompt", async () => {
+        return HttpResponse.json(mockInvalidResponse, { status: 200 });
+      })
+    );
+
+    render(<HomePage />);
+    fireEvent.change(
+      screen.getByRole("textbox", { name: /Enter your automation goal/i }),
+      { target: { value: "Invalid prompt" } }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Validate & Generate \(S2 Flow\)/i })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Prompt Needs Improvement")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Your prompt is missing an action.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Try adding what the automation should do.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("e.g., send an email")).toBeInTheDocument();
+  });
+
+  it("shows validation API error if the call fails", async () => {
+    const errorMessage = "Network error during validation";
+    server.use(
+      http.post("/api/validate-prompt", () => {
         return HttpResponse.json({ error: errorMessage }, { status: 500 });
       })
     );
 
     render(<HomePage />);
-    const generateButton = screen.getByRole("button", {
-      name: /Generate Workflow/i,
-    });
-    fireEvent.click(generateButton);
-
-    expect(screen.getByText(/Loading.../i)).toBeInTheDocument();
-
-    await waitFor(() => {
-      // Check for the Alert component's title and description
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-      expect(screen.getByText("Error")).toBeInTheDocument(); // AlertTitle
-      expect(screen.getByText(errorMessage)).toBeInTheDocument(); // AlertDescription
-    });
-
-    expect(screen.queryByText(/Loading.../i)).not.toBeInTheDocument();
-    expect(generateButton).not.toBeDisabled();
-  });
-
-  it("handles generic network error correctly", async () => {
-    server.use(
-      http.post("/api/generate-raw", () => {
-        // Simulate a network error by not returning a valid HttpResponse
-        return HttpResponse.error();
-      })
+    fireEvent.change(
+      screen.getByRole("textbox", { name: /Enter your automation goal/i }),
+      { target: { value: "Prompt causing error" } }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Validate & Generate \(S2 Flow\)/i })
     );
 
-    render(<HomePage />);
-    const generateButton = screen.getByRole("button", {
-      name: /Generate Workflow/i,
-    });
-    fireEvent.click(generateButton);
-
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-      // The exact error message might vary based on fetch implementation,
-      // this checks for a part of the default error message in page.tsx
-      expect(screen.getByText(/Failed to fetch/i)).toBeInTheDocument();
+      expect(screen.getByText("Validation Error")).toBeInTheDocument();
+      expect(screen.getByText(errorMessage)).toBeInTheDocument();
     });
   });
 });
