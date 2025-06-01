@@ -22,6 +22,7 @@ import {
   llmModels,
 } from "@/lib/toolOptions";
 import userEvent from "@testing-library/user-event";
+import { selectShadcnOption } from "../test-utils/interactionHelpers"; // Corrected path
 
 // Helper function to wrap with client context if needed, not necessary for basic HomePage
 
@@ -304,9 +305,125 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
     expect(screen.getByText(generationErrorMessage)).toBeInTheDocument();
   });
 
-  // Remove or refactor the other S3 tests like "S3: pre-populates..." and "S3: allows user to change..."
-  // as their core functionality is now tested within the main "S3/S4: calls /api/generate-raw..." test.
-  // For brevity, I'm showing them removed/commented here.
-  // it("S3: pre-populates tool/model selections after successful validation", async () => { /* ... */ });
-  // it("S3: allows user to change tool and model selections", async () => { /* ... */ });
+  const setupToToolSelectionStage = async (
+    user: ReturnType<typeof userEvent.setup>
+  ) => {
+    render(<HomePage />); // Render should happen inside the test or a more specific setup for that test.
+    await user.type(
+      screen.getByRole("textbox", { name: /Enter automation goal/i }),
+      "Test prompt to reach selections"
+    );
+    await user.click(screen.getByRole("button", { name: /Validate Prompt/i }));
+    await screen.findByText("Confirm Tools & Model");
+  };
+
+  it("S3: pre-populates with default matched tools after validation", async () => {
+    const user = userEvent.setup();
+    // This test depends on the default MSW handler for /api/validate-prompt
+    // which returns defaultValidationSuccess from src/mocks/handlers.ts
+    // Ensure defaultValidationSuccess uses known tool names for these assertions to be meaningful
+    render(<HomePage />); // Render specific to this test
+    await user.type(
+      screen.getByRole("textbox", { name: /Enter automation goal/i }),
+      "Test for default pre-population"
+    );
+    await user.click(screen.getByRole("button", { name: /Validate Prompt/i }));
+    await screen.findByText("Confirm Tools & Model");
+
+    expect(
+      screen.getByRole("combobox", { name: /Trigger Tool/i })
+    ).toHaveTextContent(triggerTools[0]);
+    expect(
+      screen.getByRole("combobox", { name: /Process Logic Tool/i })
+    ).toHaveTextContent(processLogicTools[0]);
+    expect(
+      screen.getByRole("combobox", { name: /Action Tool/i })
+    ).toHaveTextContent(actionTools[0]);
+    expect(
+      screen.getByRole("combobox", { name: /LLM Model/i })
+    ).toHaveTextContent(llmModels[0]);
+  });
+
+  it("S3: allows user to change tool and model selections", async () => {
+    const user = userEvent.setup();
+    // Uses default /api/validate-prompt handler to show selection UI
+    await setupToToolSelectionStage(user); // Calls render itself
+
+    await selectShadcnOption(user, /Trigger Tool/i, triggerTools[1]);
+    expect(
+      screen.getByRole("combobox", { name: /Trigger Tool/i })
+    ).toHaveTextContent(triggerTools[1]);
+
+    await selectShadcnOption(user, /LLM Model/i, llmModels[1]);
+    expect(
+      screen.getByRole("combobox", { name: /LLM Model/i })
+    ).toHaveTextContent(llmModels[1]);
+  });
+
+  it("S3: calls /api/generate-raw with selected data and displays output", async () => {
+    const user = userEvent.setup();
+    // Uses default /api/validate-prompt handler via setupToToolSelectionStage
+    await setupToToolSelectionStage(user);
+
+    const testUserPromptInput = "Test prompt to reach selections"; // From setupToToolSelectionStage
+    const expectedOutputForThisTest =
+      "Custom S3 JSON---JSON-GUIDE-SEPARATOR---Custom S3 Guide";
+    let capturedPayload: GenerateRawRequest | null = null;
+
+    // User changes one selection
+    await selectShadcnOption(user, /Action Tool/i, actionTools[1]);
+    await selectShadcnOption(user, /LLM Model/i, llmModels[2]); // Change model too
+
+    server.use(
+      http.post("/api/generate-raw", async ({ request }) => {
+        capturedPayload = (await request.json()) as GenerateRawRequest;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return HttpResponse.json(
+          { output: expectedOutputForThisTest },
+          { status: 200 }
+        );
+      })
+    );
+
+    const generateButton = screen.getByRole("button", {
+      name: /Generate Workflow with Selections/i,
+    });
+    await user.click(generateButton);
+    await waitFor(() =>
+      expect(generateButton).toHaveTextContent(/Generating Workflow.../i)
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Custom S3 JSON")).toBeInTheDocument()
+    );
+    expect(screen.getByText("Custom S3 Guide")).toBeInTheDocument();
+
+    expect(capturedPayload).not.toBeNull();
+    // Cast to any to bypass persistent TypeScript type narrowing issues for these assertions
+    const payloadForAssertion = capturedPayload as any;
+    expect(payloadForAssertion.userNaturalLanguagePrompt).toBe(
+      testUserPromptInput
+    );
+    expect(payloadForAssertion.selectedTriggerTool).toBe(triggerTools[0]);
+    expect(payloadForAssertion.selectedProcessLogicTool).toBe(
+      processLogicTools[0]
+    );
+    expect(payloadForAssertion.selectedActionTool).toBe(actionTools[1]);
+    expect(payloadForAssertion.selectedLlmModel).toBe(llmModels[2]);
+    expect(payloadForAssertion.aiExtractedTrigger).toBe(
+      "Default extracted trigger"
+    );
+    expect(payloadForAssertion.aiExtractedProcess).toBe(
+      "Default extracted process"
+    );
+    expect(payloadForAssertion.aiExtractedAction).toBe(
+      "Default extracted action"
+    );
+
+    await waitFor(() =>
+      expect(generateButton).toHaveTextContent(
+        /Generate Workflow with Selections/i
+      )
+    );
+  });
 });
