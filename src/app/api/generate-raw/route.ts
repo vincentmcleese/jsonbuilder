@@ -4,7 +4,6 @@ import path from "path";
 import {
   GenerateRawRequestSchema,
   type GenerateRawApiResponse,
-  GenerateRawApiResponseSchema,
 } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
@@ -22,7 +21,7 @@ export async function POST(req: NextRequest) {
     let requestBody;
     try {
       requestBody = await req.json();
-    } catch (_parseError) {
+    } catch (_) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 

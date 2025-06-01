@@ -11,11 +11,9 @@ import { server } from "@/mocks/server"; // MSW server
 import { http, HttpResponse } from "msw";
 import "@testing-library/jest-dom";
 import {
-  PromptValidationResponse,
-  GenerateRawRequest,
   ClientFacingValidationResponse,
+  GenerateRawRequest,
   GenerateRawApiResponse,
-  GenerateGuideApiResponse,
 } from "@/lib/validations";
 import {
   triggerTools,
@@ -25,10 +23,11 @@ import {
 } from "@/lib/toolOptions";
 import userEvent from "@testing-library/user-event";
 import { selectShadcnOption } from "../test-utils/interactionHelpers"; // Corrected path
+import { GenerateGuideRequest } from "@/lib/validations"; // Added import for GenerateGuideRequest
 
 // Helper function to wrap with client context if needed, not necessary for basic HomePage
 
-describe("HomePage - Sprints 2 & 3 Functionality", () => {
+describe("HomePage - Sprints 2, 3, 5 & 6 Functionality", () => {
   afterEach(cleanup);
 
   beforeEach(() => {
@@ -187,6 +186,18 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       feedback: null,
       suggestions: [],
     };
+    server.use(
+      http.post("/api/validate-prompt", () =>
+        HttpResponse.json(defaultMockData, { status: 200 })
+      )
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: /Enter automation goal/i }),
+      "Test prompt for S3 setup"
+    );
+    await user.click(screen.getByRole("button", { name: /Validate Prompt/i }));
+    await screen.findByText("Confirm Tools & Model");
     return defaultMockData;
   };
 
@@ -245,17 +256,16 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       user
     );
     const testUserPromptInput = "Test prompt for S3 setup";
-    const expectedLlmOutput = '{"n8n": "json_workflow"}';
-    const expectedGuideOutput = "### Guide Header\n- Step 1";
-    let capturedRawRequestPayload: GenerateRawRequest | null = null;
+    const expectedJsonString = '{"n8n": "json_workflow"}';
 
+    let capturedRawRequestPayload: GenerateRawRequest | null = null;
     server.use(
-      http.post("/api/generate-raw", async ({ request }) => {
+      http.post("/api/generate-raw", async ({ request: _request }) => {
         capturedRawRequestPayload =
-          (await request.json()) as GenerateRawRequest;
+          (await _request.json()) as GenerateRawRequest;
         await new Promise((resolve) => setTimeout(resolve, 100));
         const mockApiResponse: GenerateRawApiResponse = {
-          generatedJsonString: expectedLlmOutput,
+          generatedJsonString: expectedJsonString,
           isJsonSyntaxValid: true,
           jsonSyntaxErrorMessage: null,
         };
@@ -284,29 +294,35 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
       expect(screen.getByText("Generated JSON is Valid!")).toBeInTheDocument()
     );
 
-    expect(screen.getByText(expectedLlmOutput)).toBeInTheDocument();
+    expect(screen.getByText(expectedJsonString)).toBeInTheDocument();
 
     expect(capturedRawRequestPayload).not.toBeNull();
-    if (capturedRawRequestPayload) {
-      expect(capturedRawRequestPayload.userNaturalLanguagePrompt).toBe(
+
+    const payloadToAssert = capturedRawRequestPayload;
+    if (payloadToAssert) {
+      expect(payloadToAssert.userNaturalLanguagePrompt).toBe(
         testUserPromptInput
       );
-      expect(capturedRawRequestPayload.selectedTriggerTool).toBe(
+      expect(payloadToAssert.selectedTriggerTool).toBe(
         validationDataUsed.matchedTriggerTool
       );
-      expect(capturedRawRequestPayload.selectedProcessLogicTool).toBe(
+      expect(payloadToAssert.selectedProcessLogicTool).toBe(
         validationDataUsed.matchedProcessTool
       );
-      expect(capturedRawRequestPayload.selectedActionTool).toBe(actionTools[1]);
-      expect(capturedRawRequestPayload.selectedLlmModel).toBe(llmModels[1]);
-      expect(capturedRawRequestPayload.aiExtractedTrigger).toBe(
+      expect(payloadToAssert.selectedActionTool).toBe(actionTools[1]);
+      expect(payloadToAssert.selectedLlmModel).toBe(llmModels[1]);
+      expect(payloadToAssert.aiExtractedTrigger).toBe(
         validationDataUsed.extractedTriggerText
       );
-      expect(capturedRawRequestPayload.aiExtractedProcess).toBe(
+      expect(payloadToAssert.aiExtractedProcess).toBe(
         validationDataUsed.extractedProcessText
       );
-      expect(capturedRawRequestPayload.aiExtractedAction).toBe(
+      expect(payloadToAssert.aiExtractedAction).toBe(
         validationDataUsed.extractedActionText
+      );
+    } else {
+      throw new Error(
+        "capturedRawRequestPayload was unexpectedly null after not.toBeNull() check for assertions."
       );
     }
 
@@ -364,18 +380,6 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
   });
 
   describe("Sprint 6 Guide Generation", () => {
-    beforeEach(() => {
-      // Ensure a successful JSON generation state before each guide test
-      const mockPrevGenerationResult: GenerateRawApiResponse = {
-        generatedJsonString: JSON.stringify({ nodes: [], connections: {} }),
-        isJsonSyntaxValid: true,
-        jsonSyntaxErrorMessage: null,
-      };
-      // Provide this as the initial state for generationResult if needed by the test setup
-      // For tests directly calling handleGenerateGuide, this state needs to be set in the component.
-      // We will simulate this by first having /api/generate-raw return successfully in a setup step.
-    });
-
     const setupForGuideGeneration = async (
       user: ReturnType<typeof userEvent.setup>
     ) => {
@@ -420,17 +424,21 @@ describe("HomePage - Sprints 2 & 3 Functionality", () => {
 
       const mockGuideMarkdown = "### This is the Guide Content";
       server.use(
-        http.post("/api/generate-guide", async ({ request }) => {
-          const payload = (await request.json()) as any;
-          expect(payload.n8nWorkflowJson).toEqual(
-            genResult.generatedJsonString
-          );
-          expect(payload.selectedLlmModelForGuide).toBeDefined();
-          return HttpResponse.json(
-            { instructionalGuideMarkdown: mockGuideMarkdown },
-            { status: 200 }
-          );
-        })
+        http.post(
+          "/api/generate-guide",
+          async ({ request: _requestNotUsed }) => {
+            const payload =
+              (await _requestNotUsed.json()) as GenerateGuideRequest;
+            expect(payload.n8nWorkflowJson).toEqual(
+              genResult.generatedJsonString
+            );
+            expect(payload.selectedLlmModelForGuide).toBeDefined();
+            return HttpResponse.json(
+              { instructionalGuideMarkdown: mockGuideMarkdown },
+              { status: 200 }
+            );
+          }
+        )
       );
 
       await user.click(screen.getByRole("button", { name: /Generate Guide/i }));

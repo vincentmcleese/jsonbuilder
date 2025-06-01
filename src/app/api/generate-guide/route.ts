@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import {
-  GenerateGuideRequestSchema,
-  type GenerateGuideRequest,
-} from "@/lib/validations";
+import { GenerateGuideRequestSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +16,7 @@ export async function POST(req: NextRequest) {
     let requestBody;
     try {
       requestBody = await req.json();
-    } catch (e) {
+    } catch (_) {
       return NextResponse.json(
         { error: "Invalid JSON body for guide generation." },
         { status: 400 }

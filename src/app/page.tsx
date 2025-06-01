@@ -146,9 +146,26 @@ export default function HomePage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        const errorMsg =
-          (data as any)?.error ||
-          `Generation request failed: ${response.statusText}`;
+        let errorMsg = `Generation request failed: ${response.status} ${response.statusText}`;
+        if (data && typeof data === "object") {
+          // Check for our API's specific error structure first
+          if (
+            "jsonSyntaxErrorMessage" in data &&
+            typeof (data as GenerateRawApiResponse).jsonSyntaxErrorMessage ===
+              "string" &&
+            (data as GenerateRawApiResponse).jsonSyntaxErrorMessage
+          ) {
+            errorMsg = (data as GenerateRawApiResponse)
+              .jsonSyntaxErrorMessage as string;
+          }
+          // Check for a generic { error: "..." } structure
+          else if (
+            "error" in data &&
+            typeof (data as { error?: unknown }).error === "string"
+          ) {
+            errorMsg = (data as { error: string }).error;
+          }
+        }
         throw new Error(errorMsg);
       }
       setGenerationResult(data as GenerateRawApiResponse);

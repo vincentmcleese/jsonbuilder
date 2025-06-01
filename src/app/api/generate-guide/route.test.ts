@@ -6,7 +6,8 @@ import { jest } from "@jest/globals";
 import fs from "fs";
 import type { GenerateGuideRequest } from "@/lib/validations";
 
-const mockRequest = (body?: any) => ({ json: async () => body } as NextRequest);
+const mockRequest = (body?: unknown) =>
+  ({ json: async () => body } as NextRequest);
 const originalEnv = process.env;
 let fetchSpy: jest.SpiedFunction<typeof global.fetch>;
 
@@ -40,16 +41,14 @@ describe("/api/generate-guide API endpoint", () => {
 
   it("should return generated guide markdown on successful LLM call", async () => {
     const mockGuideMarkdown = "### Your Awesome Guide\n- Step 1: ...";
-    fetchSpy = jest
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: mockGuideMarkdown } }],
-          }),
-          { status: 200 }
-        )
-      );
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: mockGuideMarkdown } }],
+        }),
+        { status: 200 }
+      )
+    );
     const response = await POST(mockRequest(validGuideRequestBody));
     const data = await response.json();
     expect(response.status).toBe(200);
