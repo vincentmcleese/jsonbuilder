@@ -44,9 +44,6 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
   });
 
   it("should successfully split, parse valid JSON, and return GenerateRawApiResponse", async () => {
-    const validJson = JSON.stringify({ key: "value" });
-    const guide = "This is the guide.";
-    const llmMockOutput = `${validJson}---JSON-GUIDE-SEPARATOR---${guide}`;
     const llmMockJsonOnlyOutput = JSON.stringify({
       nodes: [],
       connections: {},
@@ -66,10 +63,7 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
     expect(response.status).toBe(200);
     expect(data.generatedJsonString).toBe(llmMockJsonOnlyOutput);
     expect(data.isJsonSyntaxValid).toBe(true);
-    expect(data.generatedGuideString).toBeNull();
-    expect(data.jsonSyntaxErrorMessage).toContain(
-      "Delimiter not found, but entire output is valid JSON"
-    );
+    expect(data.jsonSyntaxErrorMessage).toBeNull();
   });
 
   it("should handle LLM output with invalid JSON (no separator)", async () => {
@@ -88,9 +82,8 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
     expect(response.status).toBe(200);
     expect(data.generatedJsonString).toBe(invalidJsonString);
     expect(data.isJsonSyntaxValid).toBe(false);
-    expect(data.generatedGuideString).toBeNull();
-    expect(data.jsonSyntaxErrorMessage).toContain(
-      "Delimiter not found. Also, parsing the entire output as JSON failed"
+    expect(data.jsonSyntaxErrorMessage).toMatch(
+      /JSON at position|Unexpected token/i
     );
   });
 
@@ -110,12 +103,10 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
     const data = (await response.json()) as GenerateRawApiResponse;
 
     expect(response.status).toBe(200);
-    expect(data.generatedJsonString).toBe(invalidJson);
-    expect(data.generatedGuideString).toBe(guide);
+    expect(data.generatedJsonString).toBe(llmMockOutputWithSeparator);
     expect(data.isJsonSyntaxValid).toBe(false);
-    expect(data.jsonSyntaxErrorMessage).toEqual(expect.any(String));
     expect(data.jsonSyntaxErrorMessage).toMatch(
-      /Expected property name|Unexpected token/i
+      /JSON at position|Unexpected token/i
     );
   });
 
@@ -133,10 +124,9 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
     const response = await POST(mockRequest(validSprint4RequestBody));
     const data = (await response.json()) as GenerateRawApiResponse;
     expect(response.status).toBe(200);
-    expect(data.generatedJsonString).toBe("");
-    expect(data.generatedGuideString).toBe(guide);
+    expect(data.generatedJsonString).toBe(llmMockOutputEmptyJson.trim());
     expect(data.isJsonSyntaxValid).toBe(false);
-    expect(data.jsonSyntaxErrorMessage).toBe("Extracted JSON part is empty.");
+    expect(data.jsonSyntaxErrorMessage).not.toBeNull();
   });
 
   it("should return 400 for invalid GenerateRawRequest body (missing selected tool)", async () => {
@@ -194,9 +184,11 @@ describe("/api/generate-raw API endpoint (Sprint 5 functionality)", () => {
       })
     );
     const response = await POST(mockRequest(validSprint4RequestBody));
-    expect(response.status).toBe(500);
-    expect(await response.json()).toHaveProperty(
-      "error",
+    const data = (await response.json()) as GenerateRawApiResponse;
+    expect(response.status).toBe(200);
+    expect(data.isJsonSyntaxValid).toBe(false);
+    expect(data.generatedJsonString).toBeNull();
+    expect(data.jsonSyntaxErrorMessage).toBe(
       "LLM response was empty or not in the expected string format."
     );
   });

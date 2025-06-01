@@ -28,7 +28,9 @@ describe("/api/generate-guide API endpoint", () => {
     process.env = { ...originalEnv, OPENROUTER_API_KEY: "test-key" };
     jest
       .spyOn(fs, "readFileSync")
-      .mockReturnValue("Guide prompt template with {{PLACEHOLDERS}}");
+      .mockReturnValue(
+        "Guide prompt with {{N8N_WORKFLOW_JSON}} and other {{PLACEHOLDERS}}"
+      );
     if (fetchSpy) fetchSpy.mockRestore();
   });
   afterEach(() => {

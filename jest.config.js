@@ -24,10 +24,9 @@ const customJestConfig = {
       "<rootDir>/node_modules/@mswjs/interceptors/lib/node/index.js",
   },
   preset: "ts-jest",
-  // Optionally, add transformIgnorePatterns if ESM issues arise with these deps
-  // transformIgnorePatterns: [
-  //   '/node_modules/(?!(@mswjs/interceptors|msw)/)', // Adjust as needed
-  // ],
+  transformIgnorePatterns: [
+    "/node_modules/(?!(react-markdown|remark-gfm|rehype-raw|rehype-sanitize|unified|bail|is-plain-obj|trough|vfile.*|unist-util.*|micromark.*|decode-named-character-reference|character-entities|mdast-util.*|zwitch|longest-streak|ccount|markdown-table|estree-util-is-identifier-name|fault|hast.*|html-void-elements|web-namespaces|property-information|space-separated-tokens|comma-separated-tokens|trim-lines|devlop|array-iterate|.+esm.js$|.+mjs$))",
+  ],
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
