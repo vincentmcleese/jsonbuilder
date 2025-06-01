@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import { GenerateGuideRequestSchema } from "@/lib/validations";
+import { getActivePrompt } from "@/lib/admin-prompt-utils";
+import { PromptType } from "@/types/admin-prompts";
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,22 +46,23 @@ export async function POST(req: NextRequest) {
       selectedLlmModelForGuide,
     } = validatedRequest.data;
 
-    const promptFilePath = path.join(
-      process.cwd(),
-      "prompts",
-      "generation",
-      "GUIDE_INSTRUCTIONS.md"
-    );
-    let promptTemplate;
-    try {
-      promptTemplate = fs.readFileSync(promptFilePath, "utf-8");
-    } catch (fileError) {
-      console.error("Error reading GUIDE_INSTRUCTIONS.md:", fileError);
+    const activeGuidePrompt = getActivePrompt(PromptType.GenerationGuide);
+    if (!activeGuidePrompt || !activeGuidePrompt.content) {
+      console.error(
+        "CRITICAL: No active guide generation prompt found or content is empty."
+      );
       return NextResponse.json(
-        { error: "Could not load guide prompt instructions." },
+        {
+          error:
+            "Guide generation instructions not configured. Please contact support.",
+        },
         { status: 500 }
       );
     }
+    console.log(
+      `Using guide generation prompt version: ${activeGuidePrompt.version}`
+    );
+    const promptTemplate = activeGuidePrompt.content;
 
     let finalPrompt = promptTemplate;
     finalPrompt = finalPrompt.replace(

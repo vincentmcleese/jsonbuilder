@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+// import fs from "fs"; // No longer reading directly
+// import path from "path"; // No longer reading directly
 import {
   PromptValidationResponseSchema,
   type ClientFacingValidationResponse,
@@ -14,6 +14,8 @@ import {
   processLogicToolKeywords,
   actionToolKeywords,
 } from "@/lib/toolOptions";
+import { getActivePrompt } from "@/lib/admin-prompt-utils"; // Added
+import { PromptType } from "@/types/admin-prompts"; // Added
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,25 +50,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const promptFilePath = path.join(
-      process.cwd(),
-      "prompts",
-      "validation",
-      "TAP_VALIDATION_PROMPT.md"
-    );
-    let validationPromptTemplate;
-    try {
-      validationPromptTemplate = fs.readFileSync(promptFilePath, "utf-8");
-    } catch (fileError) {
-      console.error("Error reading validation prompt file:", fileError);
+    const activeValidationPrompt = getActivePrompt(PromptType.Validation); // New way
+    if (!activeValidationPrompt || !activeValidationPrompt.content) {
+      console.error(
+        "CRITICAL: No active validation prompt found or content is empty."
+      );
       return NextResponse.json(
         {
           error:
-            "Could not load validation instructions. Please contact support.",
+            "Validation instructions not configured. Please contact support.",
         },
         { status: 500 }
       );
     }
+    console.log(
+      `Using validation prompt version: ${activeValidationPrompt.version}`
+    ); // Logging version
+    const validationPromptTemplate = activeValidationPrompt.content;
 
     const filledPrompt = validationPromptTemplate.replace(
       "{{USER_PROMPT}}",

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import {
   GenerateRawRequestSchema,
   type GenerateRawApiResponse,
 } from "@/lib/validations";
+import { getActivePrompt } from "@/lib/admin-prompt-utils";
+import { PromptType } from "@/types/admin-prompts";
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,22 +48,35 @@ export async function POST(req: NextRequest) {
       aiExtractedAction,
     } = validatedRequest.data;
 
-    const promptFilePath = path.join(
-      process.cwd(),
-      "prompts",
-      "generation",
-      "INSTRUCTIONS.md"
-    );
-    let promptTemplate;
-    try {
-      promptTemplate = fs.readFileSync(promptFilePath, "utf-8");
-    } catch (fileError) {
-      console.error("Error reading INSTRUCTIONS.md:", fileError);
+    const activeMainGenPrompt = getActivePrompt(PromptType.GenerationMain);
+    if (!activeMainGenPrompt || !activeMainGenPrompt.content) {
+      console.error(
+        "CRITICAL: No active main generation prompt template found or content is empty."
+      );
       return NextResponse.json(
-        { error: "Could not load base prompt instructions." },
+        { error: "Main generation instructions template not configured." },
         { status: 500 }
       );
     }
+    console.log(
+      `Using main generation prompt template version: ${activeMainGenPrompt.version}`
+    );
+    let promptTemplate = activeMainGenPrompt.content;
+
+    const activeTrainingData = getActivePrompt(
+      PromptType.GenerationMainTrainingData
+    );
+    if (!activeTrainingData || !activeTrainingData.content) {
+      console.warn(
+        "Warning: No active training data found for main generation or content is empty. Proceeding without it."
+      );
+    }
+    if (activeTrainingData) {
+      console.log(
+        `Using main generation training data version: ${activeTrainingData.version}`
+      );
+    }
+    const trainingDataContent = activeTrainingData?.content || "";
 
     let finalPrompt = promptTemplate;
     finalPrompt = finalPrompt.replace(
@@ -94,6 +107,7 @@ export async function POST(req: NextRequest) {
       "{{SELECTED_ACTION_TOOL}}",
       selectedActionTool || "N/A"
     );
+    finalPrompt = finalPrompt.replace("{{TRAINING_DATA}}", trainingDataContent);
 
     const llmApiCall = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",

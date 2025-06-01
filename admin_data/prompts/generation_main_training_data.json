@@ -1,0 +1,10 @@
+[
+    {
+        "version": 1,
+        "content": "/* \n  TRAINING DATA for Main n8n Workflow Generation.\n\n  This content will be injected into the main generation prompt via the {{TRAINING_DATA}} variable.\n  Use this space to provide extensive examples, few-shot exemplars, detailed guidelines, \n  or any structured data that helps the LLM generate high-quality n8n JSON workflows.\n\n  Examples:\n  - Multiple full JSON examples of n8n workflows for different scenarios.\n  - Detailed explanations of how to structure nodes for common tools.\n  - Best practices for naming conventions, error handling patterns in n8n, etc.\n*/",
+        "changeDescription": "Initial placeholder for Main Generation Training Data.",
+        "createdAt": "2024-07-27T00:00:00.000Z",
+        "lastModifiedAt": "2024-07-27T00:00:00.000Z",
+        "isActive": true
+    }
+]

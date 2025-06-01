@@ -1,0 +1,10 @@
+[
+    {
+        "version": 1,
+        "content": "You are an expert technical writer specializing in n8n workflows.\nGiven the n8n workflow JSON, the user's original goal, their AI-analyzed intent, and the primary tools they selected, please generate a clear, step-by-step instructional guide in Markdown format.\n\nUSER'S ORIGINAL GOAL:\n\"{{USER_NATURAL_LANGUAGE_PROMPT}}\"\n\nAI ANALYSIS OF GOAL:\n\n- Trigger: \"{{AI_EXTRACTED_TRIGGER_TEXT}}\"\n- Process: \"{{AI_EXTRACTED_PROCESS_TEXT}}\"\n- Action: \"{{AI_EXTRACTED_ACTION_TEXT}}\"\n\nSELECTED TOOLS:\n\n- Trigger Tool: \"{{SELECTED_TRIGGER_TOOL}}\"\n- Process Logic Tool: \"{{SELECTED_PROCESS_LOGIC_TOOL}}\"\n- Action Tool: \"{{SELECTED_ACTION_TOOL}}\"\n\nN8N WORKFLOW JSON:\n\n```json\n{{N8N_WORKFLOW_JSON}}\n```\n\nYour guide should:\n\n1.  Briefly explain what the overall workflow does, referencing the user's goal.\n2.  Describe each key node (especially the selected tools) and its role in this specific workflow.\n3.  Provide simple instructions on how to import the JSON into n8n.\n4.  Mention any prerequisites or setup steps (e.g., credentials needed for specific nodes if apparent from the JSON, though you don't need to detail credential creation itself).\n5.  Explain how to trigger or run the workflow.\n\nOutput ONLY the Markdown content for the guide. Do not include any other text, introductions, or explanations.",
+        "changeDescription": "Initial version from GUIDE_INSTRUCTIONS.md",
+        "createdAt": "2024-07-27T00:00:00.000Z",
+        "lastModifiedAt": "2024-07-27T00:00:00.000Z",
+        "isActive": true
+    }
+]
