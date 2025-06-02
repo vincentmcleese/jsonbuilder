@@ -1,5 +1,3 @@
-"/use client"; // Intentionally incorrect to make it a server component first for env var access
-
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
